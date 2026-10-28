@@ -2,7 +2,7 @@ name: koready
 
 services:
   db:
-    image: postgis/postgis:17-3.6
+    image: imresamu/postgis:17-3.6.1-trixie
     environment:
       POSTGRES_DB: koready
       POSTGRES_USER: koready
