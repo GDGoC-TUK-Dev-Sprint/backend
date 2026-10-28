@@ -48,9 +48,11 @@ public class DatalabCountryRegion {
 	@Column(nullable = false, length = 20)
 	private String sidoName;
 
-	@Column(nullable = false, precision = 5, scale = 2)
+	/** 소비 파일에 없는 시도는 NULL (두 파일의 시도 목록이 다르다) */
+	@Column(precision = 5, scale = 2)
 	private BigDecimal spendSharePct;
 
-	@Column(nullable = false, precision = 5, scale = 2)
+	/** 방문 파일에 없는 시도는 NULL */
+	@Column(precision = 5, scale = 2)
 	private BigDecimal visitSharePct;
 }

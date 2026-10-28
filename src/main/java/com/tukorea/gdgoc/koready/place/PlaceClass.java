@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.ColumnDefault;
 
 /**
- * TourAPI 신분류 코드표 (대·중·소 3단계).
+ * TourAPI 신분류 코드표 (대·중·소 3단계). 코드는 대 2 · 중 4 · 소 8자리, 추천코스(C01)만 3 · 5 · 9자리.
  */
 @Entity
 @Table(name = "place_classes")
@@ -24,7 +24,7 @@ import org.hibernate.annotations.ColumnDefault;
 public class PlaceClass {
 
 	@Id
-	@Column(length = 8)
+	@Column(length = 9)
 	private String code;
 
 	@Column(nullable = false, check = @CheckConstraint(name = "ck_place_classes_level", constraint = "level between 1 and 3"))
