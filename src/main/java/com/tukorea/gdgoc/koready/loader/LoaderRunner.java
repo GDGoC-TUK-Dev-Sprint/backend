@@ -19,12 +19,16 @@ class LoaderRunner implements ApplicationRunner {
 
 	private final PlaceClassLoader placeClassLoader;
 	private final PlaceLoader placeLoader;
+	private final HoursFeeLoader hoursFeeLoader;
+	private final SignalLoader signalLoader;
 	private final DatalabLoader datalabLoader;
 
 	@Override
 	public void run(ApplicationArguments args) {
 		placeClassLoader.load();
 		placeLoader.load();
+		hoursFeeLoader.load();
+		signalLoader.load();
 		datalabLoader.load();
 		log.info("적재 끝");
 	}

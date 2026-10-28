@@ -27,7 +27,8 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * {@code places}: TourAPI 국문 서울 목록 + 공통(개요)·소개·반복정보.
- * 운영시간·요금은 원문만 넣고 유형은 {@code UNKNOWN}으로 둔다.
+ * 운영시간·요금은 원문만 넣고 유형은 {@code UNKNOWN}으로 둔다 (나누는 것은 {@link HoursFeeLoader}).
+ * 원문의 {@code <br>} 태그는 줄바꿈으로 바꾼다.
  */
 @Slf4j
 @Component
@@ -163,9 +164,10 @@ class PlaceLoader {
 		return new Object[] {
 				contentId, (short) contentType, class1, class2, text(item, "lclsSystm3"), text(item, "title"),
 				text(item, "lDongRegnCd"), signgu, text(item, "addr1"), text(item, "addr2"), x, y,
-				field(common, "overview"), text(item, "firstimage"), text(item, "firstimage2"), text(item, "cpyrhtDivCd"),
-				HoursType.UNKNOWN.name(), field(intro, fields.hours()), field(intro, fields.rest()),
-				FeeType.UNKNOWN.name(), feeText,
+				SourceText.clean(field(common, "overview")), text(item, "firstimage"), text(item, "firstimage2"),
+				text(item, "cpyrhtDivCd"),
+				HoursType.UNKNOWN.name(), SourceText.clean(field(intro, fields.hours())), SourceText.clean(field(intro, fields.rest())),
+				FeeType.UNKNOWN.name(), SourceText.clean(feeText),
 				(short) stay.minutes(), stay.basis().name(),
 				contentType == 15 ? date(field(intro, "eventstartdate")) : null,
 				contentType == 15 ? date(field(intro, "eventenddate")) : null,

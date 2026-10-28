@@ -45,6 +45,19 @@ class TourApiFiles {
 		return items(korDir.resolve("code").resolve("lclsSystm.json"));
 	}
 
+	/** 상세 응답을 받아 둔 콘텐츠 ID (파일 이름). 목록에 없는 여행코스도 들어 있다 */
+	List<String> detailIds(String kind) {
+		try (Stream<Path> details = Files.list(korDir.resolve(kind))) {
+			return details.map(p -> p.getFileName().toString())
+					.filter(name -> name.endsWith(".json"))
+					.map(name -> name.substring(0, name.length() - ".json".length()))
+					.sorted()
+					.toList();
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
+
 	/** 장소별 상세 응답 ({@code common}·{@code intro}·{@code info})의 item. 파일이 없으면 빈 목록 */
 	List<JsonNode> detailItems(String kind, String contentId) {
 		Path file = korDir.resolve(kind).resolve(contentId + ".json");
