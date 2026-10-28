@@ -13,6 +13,7 @@ KOREADY API 서버.
 - 로컬 DB(PostgreSQL + PostGIS): `docker compose up -d`. 실행·테스트 전에 먼저 띄운다
 - 실행: `./gradlew bootRun`
 - 테스트: `./gradlew test`
+- 장소·통계 적재 (원본 파일이 있는 사람만): 환경변수 `KOREADY_RAW_DIR`에 원본 폴더를 두고 `./gradlew bootRun --args='--spring.profiles.active=loader'`. 끝나면 종료한다
 
 ## 패키지
 - 루트 패키지: `com.tukorea.gdgoc.koready`
@@ -29,3 +30,4 @@ KOREADY API 서버.
 - 한국관광 데이터랩 카드 소비 통계: CSV 수동 다운로드 → 배치 적재 (크롤링 금지)
 - 교통 운임: 요금 규칙을 따로 적재하지 않는다. ODsay 대중교통 길찾기로 확정한 방문 순서의 연속 구간(Leg)만 조회해 이동시간·운임을 얻는다. 방문 순서를 정하는 데는 쓰지 않는다
 - 마스터 데이터는 월 1회 배치, 사용자 일정은 실시간
+- 적재 코드는 `loader` 패키지에 있고 `loader` 프로필로 켤 때만 돈다. JdbcTemplate 배치로 자연 키(`content_id` 등)에 upsert해서 다시 돌려도 결과가 같다. 원본·덤프 파일은 저장소에 올리지 않는다
