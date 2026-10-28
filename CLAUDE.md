@@ -22,6 +22,7 @@ KOREADY API 서버.
 - 동선(일자 배정·순서·이동시간)은 계산 로직이 정한다. LLM은 조건 파싱과 설명 생성만 맡는다
 - 경비 응답은 항목별 범위(최소~최대)와 근거 데이터 출처를 함께 내려준다
 - 엔티티·API 필드 이름은 서비스 용어(Trip, TripDay, TripItem, Leg, Place)를 그대로 쓴다
+- 장소 추천·검색 쿼리는 `place_classes.excluded = true`인 분류의 장소를 뺀다
 
 ## 데이터 적재
 - TourAPI: Open API → 배치 적재
