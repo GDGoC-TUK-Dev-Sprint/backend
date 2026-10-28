@@ -1,0 +1,22 @@
+name: koready
+
+services:
+  db:
+    image: imresamu/postgis:17-3.6.1-trixie
+    environment:
+      POSTGRES_DB: koready
+      POSTGRES_USER: koready
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-koready}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U koready -d koready"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
