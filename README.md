@@ -2,7 +2,6 @@
 
 [Koready](https://github.com/GDGoC-Koready) 서비스의 백엔드 API 서버입니다.
 
-> 전체 서비스 소개는 [Koready README](https://github.com/GDGoC-Koready/Koready)를 참고하세요.
 
 ## 기술 스택
 
@@ -10,7 +9,7 @@
 |------|------|
 | Language | Java 21 |
 | Framework | Spring Boot 4.1.1 |
-| DB | PostgreSQL (운영) / H2 (개발) |
+| DB | PostgreSQL |
 | Cache | Redis (TourAPI 응답 캐싱) |
 | ORM | Spring Data JPA |
 | Build | Gradle |
