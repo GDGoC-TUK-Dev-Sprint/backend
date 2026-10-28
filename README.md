@@ -10,7 +10,7 @@
 |------|------|
 | Language | Java 21 |
 | Framework | Spring Boot 4.1.1 |
-| DB | PostgreSQL (운영) / H2 (개발) |
+| DB | PostgreSQL + PostGIS (로컬은 Docker) |
 | Cache | Redis (TourAPI 응답 캐싱) |
 | ORM | Spring Data JPA |
 | Build | Gradle |
@@ -27,11 +27,12 @@
 ### 요구사항
 
 - Java 21
-- PostgreSQL (또는 H2로 개발 모드 실행)
+- Docker Desktop (로컬 DB: PostgreSQL + PostGIS)
 
 ### 실행
 
 ```bash
+docker compose up -d   # 로컬 DB를 먼저 띄운다
 ./gradlew bootRun
 ```
 
