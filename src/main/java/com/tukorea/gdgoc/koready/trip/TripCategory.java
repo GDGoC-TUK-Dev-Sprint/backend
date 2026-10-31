@@ -28,4 +28,8 @@ public class TripCategory {
 	@JoinColumn(name = "class1_code", nullable = false, insertable = false, updatable = false,
 			foreignKey = @ForeignKey(name = "fk_trip_categories_class1_code"))
 	private PlaceClass placeClass;
+
+	TripCategory(String class1Code) {
+		this.class1Code = class1Code;
+	}
 }

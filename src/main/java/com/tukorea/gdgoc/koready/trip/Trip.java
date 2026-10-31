@@ -20,6 +20,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.Set;
 import lombok.AccessLevel;
@@ -125,4 +126,47 @@ public class Trip {
 			joinColumns = @JoinColumn(name = "trip_id", foreignKey = @ForeignKey(name = "fk_trip_categories_trip_id")))
 	@OnDelete(action = OnDeleteAction.CASCADE)
 	private Set<TripCategory> categories = new HashSet<>();
+
+	/** 확정 전(DRAFT) 여행을 만든다 */
+	static Trip create(User user, TripConditions conditions) {
+		Trip trip = new Trip();
+		trip.user = user;
+		trip.apply(conditions);
+		return trip;
+	}
+
+	/** 여행 일수 (2박 3일이면 3) */
+	public int getDays() {
+		return (int) ChronoUnit.DAYS.between(startDate, endDate) + 1;
+	}
+
+	/** 확정한 여행은 편집할 수 없다 */
+	public boolean isEditable() {
+		return status == TripStatus.DRAFT;
+	}
+
+	/** 그날(서울 날짜) 기준 진행 상태 */
+	public TripProgress progressOn(LocalDate today) {
+		if (today.isBefore(startDate)) {
+			return TripProgress.UPCOMING;
+		}
+		return today.isAfter(endDate) ? TripProgress.COMPLETED : TripProgress.ONGOING;
+	}
+
+	private void apply(TripConditions conditions) {
+		nationalityCode = conditions.nationality().name();
+		startDate = conditions.startDate();
+		endDate = conditions.endDate();
+		partySize = (short) conditions.partySize();
+		budgetPerPersonKrw = conditions.budgetPerPersonKrw();
+		TripConditions.Stay stay = conditions.stay();
+		stayType = stay.type();
+		stayPlace = stay.place();
+		stayAreaCode = stay.area() == null ? null : stay.area().name();
+		stayName = stay.name();
+		stayAddress = stay.address();
+		stayLocation = stay.location();
+		categories.clear();
+		conditions.categories().forEach(category -> categories.add(new TripCategory(category.name())));
+	}
 }
