@@ -17,6 +17,7 @@ KOREADY API 서버.
 
 ## 패키지
 - 루트 패키지: `com.tukorea.gdgoc.koready`
+- 국적·카테고리·지역 14개(중심 좌표)는 `meta` 패키지의 `Nationality`·`Category`·`Area`를 쓴다
 
 ## 구현 규칙
 - 금액·영업시간·거리·이동시간은 DB 조회나 계산 코드에서 만든다. LLM 응답에서 숫자를 받아 그대로 저장하거나 반환하지 않는다
