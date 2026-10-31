@@ -61,6 +61,12 @@ docker compose up -d   # 로컬 DB를 먼저 띄운다
 ./gradlew bootRun
 ```
 
+`bootRun`은 `local` 프로필로 돈다. 로그인이 생기기 전에는 로그인이 필요한 API에 헤더 `X-Dev-User-Id: {사용자 ID}`를 붙여 부른다 (`local`·`test` 프로필에서만 받는다). 사용자는 `bootRun`을 한 번 띄워 테이블이 생긴 뒤 SQL로 만든다.
+
+```bash
+docker compose exec db psql -U koready -d koready -c "INSERT INTO users (name, created_at, updated_at) VALUES ('시험 사용자', now(), now()) RETURNING id;"
+```
+
 ### 테스트
 
 ```bash

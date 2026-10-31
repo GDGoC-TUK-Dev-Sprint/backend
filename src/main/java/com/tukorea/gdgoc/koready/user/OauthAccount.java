@@ -17,6 +17,7 @@ import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
@@ -52,6 +53,7 @@ public class OauthAccount {
 	@Column(nullable = false, length = 255)
 	private String subject;
 
+	@CreationTimestamp
 	@Column(nullable = false)
 	private Instant createdAt;
 }

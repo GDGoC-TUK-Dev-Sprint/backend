@@ -12,6 +12,8 @@ import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 /**
  * 사용자. 아이디·비밀번호 해시는 아이디 계정만 채운다 (소셜 계정은 NULL).
@@ -45,9 +47,11 @@ public class User {
 	@Column(length = 50)
 	private String name;
 
+	@CreationTimestamp
 	@Column(nullable = false)
 	private Instant createdAt;
 
+	@UpdateTimestamp
 	@Column(nullable = false)
 	private Instant updatedAt;
 }

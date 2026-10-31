@@ -37,3 +37,8 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// 로컬 실행은 local 프로필 (개발용 로그인 헤더). --spring.profiles.active로 다른 프로필을 주면 그 프로필로 돈다
+tasks.named('bootRun') {
+	systemProperty 'spring.profiles.default', 'local'
+}
