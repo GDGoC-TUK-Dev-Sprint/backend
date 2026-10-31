@@ -22,11 +22,11 @@ import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -35,7 +35,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 여행 만들기와 여행 요약 응답. 다른 API가 응답에 여행 요약을 넣을 때도 {@link #toResponse}를 쓴다.
+ * 여행 만들기와 여행 요약. 여행을 다루는 다른 API도 내 여행은 {@link #findMyTrip}으로 찾고,
+ * 응답에 여행 요약을 넣을 때는 {@link #toResponse}를 쓴다.
  */
 @Service
 @RequiredArgsConstructor
@@ -73,9 +74,25 @@ public class TripService {
 		return toResponse(trip, language);
 	}
 
+	/** 내 여행의 요약 */
+	@Transactional(readOnly = true)
+	public TripResponse get(Long userId, Long tripId, Language language) {
+		return toResponse(findMyTrip(userId, tripId), language);
+	}
+
+	/**
+	 * 내 여행. 없거나 다른 사용자의 여행이면 {@code 404 TRIP_NOT_FOUND}다 (남의 여행이 있는지 알리지 않는다).
+	 * 숙소·카테고리를 지연 로딩하므로 부르는 쪽 트랜잭션 안에서 쓴다.
+	 */
+	public Trip findMyTrip(Long userId, Long tripId) {
+		// 사용자는 지연 로딩 프록시라 ID만 읽어 users를 조회하지 않는다
+		return trips.findById(tripId)
+				.filter(trip -> trip.getUser().getId().equals(userId))
+				.orElseThrow(() -> new ApiException(ErrorCode.TRIP_NOT_FOUND));
+	}
+
 	/** 여행 요약. 숙소·카테고리를 지연 로딩하므로 트랜잭션 안에서 부른다. 희망 예산은 원화로 준다 (환율 환산 전) */
 	public TripResponse toResponse(Trip trip, Language language) {
-		Nationality nationality = Nationality.valueOf(trip.getNationalityCode());
 		Integer budget = trip.getBudgetPerPersonKrw();
 		return new TripResponse(
 				trip.getId(),
@@ -84,7 +101,7 @@ public class TripService {
 				trip.isEditable(),
 				trip.progressOn(LocalDate.now(clock)),
 				language.pick(trip.getTitleKo(), trip.getTitleEn()),
-				new Code(nationality.name(), language.pick(nationality.getNameKo(), nationality.getNameEn())),
+				nationality(trip.getNationalityCode(), language),
 				trip.getStartDate(),
 				trip.getEndDate(),
 				trip.getDays() - 1,
@@ -105,7 +122,7 @@ public class TripService {
 		}
 		if (request.endDate().isBefore(request.startDate())) {
 			errors.add("endDate", "시작일과 같거나 뒤여야 합니다");
-		} else if (ChronoUnit.DAYS.between(request.startDate(), request.endDate()) + 1 > properties.maxDays()) {
+		} else if (Trip.countDays(request.startDate(), request.endDate()) > properties.maxDays()) {
 			errors.add("endDate", "여행은 최대 " + properties.maxDays() + "일입니다");
 		}
 		if (request.partySize() < 1 || request.partySize() > properties.maxPartySize()) {
@@ -162,6 +179,13 @@ public class TripService {
 		};
 	}
 
+	/** 국적. 목록에서 빠진 코드면 코드를 이름으로 준다 */
+	private static Code nationality(String code, Language language) {
+		return find(Nationality.class, code)
+				.map(n -> new Code(n.name(), language.pick(n.getNameKo(), n.getNameEn())))
+				.orElseGet(() -> new Code(code, code));
+	}
+
 	/** 고른 카테고리. 이름은 분류 코드표에서 읽고, 순서는 {@link Category} 선언 순서다 */
 	private List<Code> categories(Trip trip, Language language) {
 		Set<String> codes = trip.getCategories().stream()
@@ -181,18 +205,23 @@ public class TripService {
 
 	private static TripResponse.Stay stay(Trip trip, Language language) {
 		Place place = trip.getStayPlace();
-		// 지도 핀이면 저장한 핀 주소
+		// 지도 핀이면 저장한 핀 주소, 목록에서 빠진 지역이면 저장한 지역 이름(국문)
 		String nameKo = trip.getStayName();
 		String nameEn = null;
 		if (trip.getStayType() == StayType.PLACE) {
 			nameKo = place.getNameKo();
 			nameEn = place.getNameEn();
 		} else if (trip.getStayType() == StayType.AREA) {
-			Area area = Area.valueOf(trip.getStayAreaCode());
-			nameKo = area.getNameKo();
-			nameEn = area.getNameEn();
+			Optional<Area> area = find(Area.class, trip.getStayAreaCode());
+			nameKo = area.map(Area::getNameKo).orElse(nameKo);
+			nameEn = area.map(Area::getNameEn).orElse(null);
 		}
 		return new TripResponse.Stay(trip.getStayType(), place == null ? null : place.getId(), trip.getStayAreaCode(),
 				language.pick(nameKo, nameEn), nameKo, trip.getStayAddress(), LatLng.from(trip.getStayLocation()));
+	}
+
+	/** 저장된 코드의 상수. 국적·지역 목록이 잠정이라, 지난 여행에 목록에서 빠진 코드가 남아 있을 수 있다 */
+	private static <E extends Enum<E>> Optional<E> find(Class<E> type, String code) {
+		return Arrays.stream(type.getEnumConstants()).filter(constant -> constant.name().equals(code)).findFirst();
 	}
 }

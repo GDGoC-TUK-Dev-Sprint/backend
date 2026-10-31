@@ -48,6 +48,9 @@ import org.locationtech.jts.geom.Point;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Trip {
 
+	/** {@code stay_address} 길이. 장소 주소(addr1 + addr2, 각 200자)는 이보다 길 수 있어 잘라 저장한다 */
+	static final int STAY_ADDRESS_LENGTH = 300;
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
@@ -103,7 +106,7 @@ public class Trip {
 	@Column(nullable = false, length = 200)
 	private String stayName;
 
-	@Column(length = 300)
+	@Column(length = STAY_ADDRESS_LENGTH)
 	private String stayAddress;
 
 	/** 동선의 출발·도착점. 경도(x)·위도(y), SRID 4326 */
@@ -137,6 +140,11 @@ public class Trip {
 
 	/** 여행 일수 (2박 3일이면 3) */
 	public int getDays() {
+		return countDays(startDate, endDate);
+	}
+
+	/** 시작일부터 종료일까지 날 수 (같은 날이면 1). 저장 전 요청 검사도 이것으로 센다 */
+	static int countDays(LocalDate startDate, LocalDate endDate) {
 		return (int) ChronoUnit.DAYS.between(startDate, endDate) + 1;
 	}
 
@@ -164,9 +172,17 @@ public class Trip {
 		stayPlace = stay.place();
 		stayAreaCode = stay.area() == null ? null : stay.area().name();
 		stayName = stay.name();
-		stayAddress = stay.address();
+		stayAddress = truncate(stay.address(), STAY_ADDRESS_LENGTH);
 		stayLocation = stay.location();
 		categories.clear();
 		conditions.categories().forEach(category -> categories.add(new TripCategory(category.name())));
+	}
+
+	/** 글자 수로 자른다. PostgreSQL varchar(n)이 글자(코드 포인트) 수로 세므로 UTF-16 두 칸인 글자를 반으로 가르지 않는다 */
+	private static String truncate(String value, int maxLength) {
+		if (value == null || value.codePointCount(0, value.length()) <= maxLength) {
+			return value;
+		}
+		return value.substring(0, value.offsetByCodePoints(0, maxLength));
 	}
 }

@@ -2,6 +2,7 @@ package com.tukorea.gdgoc.koready.trip;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tukorea.gdgoc.koready.common.LatLng;
 import com.tukorea.gdgoc.koready.meta.Area;
 import com.tukorea.gdgoc.koready.support.IntegrationTest;
 import jakarta.persistence.EntityManager;
@@ -80,6 +81,7 @@ class TripCreateTest {
 				.containsEntry("stay_place_id", placeId)
 				.containsEntry("stay_area_code", null)
 				.containsEntry("stay_name", lodging.get("name_ko"));
+		assertThat(savedStayLocation(tripId)).isEqualTo(new LatLng((Double) lodging.get("lat"), (Double) lodging.get("lng")));
 		assertThat(jdbc.queryForList("SELECT class1_code FROM trip_categories WHERE trip_id = ?", String.class, tripId))
 				.containsExactlyInAnyOrder("HS", "SH");
 	}
@@ -106,6 +108,22 @@ class TripCreateTest {
 				.containsEntry("stay_area_code", "MYEONGDONG")
 				.containsEntry("stay_name", "명동")
 				.containsEntry("stay_address", null);
+		long tripId = jdbc.queryForObject("SELECT id FROM trips WHERE user_id = ?", Long.class, userId);
+		assertThat(savedStayLocation(tripId)).isEqualTo(Area.MYEONGDONG.getCenter());
+	}
+
+	@Test
+	void longLodgingAddressIsCutToColumnLength() {
+		long placeId = jdbc.queryForObject(
+				"SELECT id FROM places WHERE content_type_id = 32 AND active ORDER BY id LIMIT 1", Long.class);
+		// addr1 + " " + addr2 = 301글자. 이모지는 UTF-16으로 두 칸이지만 PostgreSQL은 한 글자로 센다
+		jdbc.update("UPDATE places SET addr1 = repeat('가', 100), addr2 = repeat('😀', 200) WHERE id = ?", placeId);
+
+		MvcTestResult result = create(placeTrip(placeId));
+
+		String saved = jdbc.queryForObject("SELECT stay_address FROM trips WHERE user_id = ?", String.class, userId);
+		assertThat(saved).isEqualTo("가".repeat(100) + " " + "😀".repeat(199));
+		assertThat(result).bodyJson().extractingPath("$.stay.address").isEqualTo(saved);
 	}
 
 	@Test
@@ -264,6 +282,16 @@ class TripCreateTest {
 	}
 
 	@Test
+	void partySizeIsWholeNumber() {
+		assertThat(post(areaTrip("2026-11-10", "2026-11-12").replace("\"partySize\": 2", "\"partySize\": 2.7")))
+				.hasStatus(HttpStatus.BAD_REQUEST)
+				.bodyJson()
+				.isLenientlyEqualTo("""
+						{"code": "INVALID_REQUEST", "fields": [{"field": "partySize", "reason": "형식이 맞지 않습니다"}]}
+						""");
+	}
+
+	@Test
 	void requiresExistingUser() {
 		String body = areaTrip("2026-11-10", "2026-11-12");
 		long missingUserId = jdbc.queryForObject("SELECT max(id) + 1 FROM users", Long.class);
@@ -301,6 +329,13 @@ class TripCreateTest {
 		entityManager.flush();
 		entityManager.clear();
 		return result;
+	}
+
+	/** 저장된 숙소 좌표. 응답은 저장 전 메모리의 좌표를 그대로 주므로 DB 값을 따로 본다 */
+	private LatLng savedStayLocation(long tripId) {
+		return jdbc.queryForObject(
+				"SELECT ST_Y(stay_location::geometry), ST_X(stay_location::geometry) FROM trips WHERE id = ?",
+				(rs, i) -> new LatLng(rs.getDouble(1), rs.getDouble(2)), tripId);
 	}
 
 	private static String areaTrip(String startDate, String endDate) {
