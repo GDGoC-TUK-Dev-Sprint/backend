@@ -40,6 +40,9 @@ import org.locationtech.jts.geom.Point;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Place {
 
+	/** TourAPI 콘텐츠 유형: 숙박 */
+	public static final short LODGING_CONTENT_TYPE_ID = 32;
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
@@ -176,4 +179,17 @@ public class Place {
 	@ColumnDefault("true")
 	@Column(nullable = false)
 	private boolean active;
+
+	/** 숙박 장소인지 (숙소로 고를 수 있는 장소) */
+	public boolean isLodging() {
+		return contentTypeId == LODGING_CONTENT_TYPE_ID;
+	}
+
+	/** 주소 (국문). 상세 주소(addr2)가 있으면 띄어 붙인다 */
+	public String getAddress() {
+		if (addr2 == null || addr2.isBlank()) {
+			return addr1;
+		}
+		return addr1 == null || addr1.isBlank() ? addr2 : addr1 + " " + addr2;
+	}
 }

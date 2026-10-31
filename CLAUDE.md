@@ -18,6 +18,8 @@ KOREADY API 서버.
 ## 패키지
 - 루트 패키지: `com.tukorea.gdgoc.koready`
 - 국적·카테고리·지역 14개(중심 좌표)는 `meta` 패키지의 `Nationality`·`Category`·`Area`를 쓴다
+- 여행 요약(Trip) 응답은 `trip` 패키지의 `TripService.toResponse`로 만든다 (지연 로딩이 있어 트랜잭션 안에서 부른다)
+- 장소는 `place.PlaceRepository`로 읽는다. 주소(국문)는 `Place.getAddress()`
 
 ## 구현 규칙
 - 금액·영업시간·거리·이동시간은 DB 조회나 계산 코드에서 만든다. LLM 응답에서 숫자를 받아 그대로 저장하거나 반환하지 않는다
@@ -35,6 +37,7 @@ API를 만들 때 따로 만들지 말고 이것을 쓴다.
 - "오늘"·"지금"은 `Clock` 빈(서울)으로 정한다 (`LocalDate.now(clock)`). 기록 시각은 `SeoulTime.of(instant)`로 `+09:00`을 붙여 준다
 - 공통 객체: `Code`(코드·표시 이름), `LatLng`, `Money`(금액·통화)
 - 엔티티의 `created_at`·`updated_at`은 `@CreationTimestamp`·`@UpdateTimestamp`로 채운다
+- 설정값은 `application.properties`의 `koready.*`에 두고 `@ConfigurationProperties` 레코드로 읽는다 (예: `trip.TripProperties`)
 
 ## 데이터 적재
 - TourAPI: Open API → 배치 적재
