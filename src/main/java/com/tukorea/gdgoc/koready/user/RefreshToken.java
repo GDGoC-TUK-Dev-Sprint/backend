@@ -16,6 +16,7 @@ import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
@@ -51,6 +52,7 @@ public class RefreshToken {
 	@Column(nullable = false)
 	private Instant expiresAt;
 
+	@CreationTimestamp
 	@Column(nullable = false)
 	private Instant createdAt;
 }

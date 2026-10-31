@@ -17,6 +17,7 @@ import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
@@ -46,6 +47,7 @@ public class Favorite {
 	private Place place;
 
 	/** 찜한 시각 */
+	@CreationTimestamp
 	@Column(nullable = false)
 	private Instant createdAt;
 }
