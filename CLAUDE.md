@@ -18,6 +18,7 @@ KOREADY API 서버.
 ## 패키지
 - 루트 패키지: `com.tukorea.gdgoc.koready`
 - 국적·카테고리·지역 14개(중심 좌표)는 `meta` 패키지의 `Nationality`·`Category`·`Area`를 쓴다
+- 여행을 다루는 API는 `TripService.findMyTrip(userId, tripId)`로 여행을 찾는다 (없거나 다른 사용자의 여행이면 `404 TRIP_NOT_FOUND`)
 - 여행 요약(Trip) 응답은 `trip` 패키지의 `TripService.toResponse`로 만든다 (지연 로딩이 있어 트랜잭션 안에서 부른다)
 - 장소는 `place.PlaceRepository`로 읽는다. 주소(국문)는 `Place.getAddress()`
 
@@ -32,6 +33,7 @@ KOREADY API 서버.
 API를 만들 때 따로 만들지 말고 이것을 쓴다.
 - 오류: `throw new ApiException(ErrorCode.X)`. 응답 `{code, message, fields}`는 `GlobalExceptionHandler`가 만든다. 서비스에서 입력을 검사할 때는 `FieldErrors`로 모아 한 번에 `400 INVALID_REQUEST`를 던진다
 - 성공 응답은 감싸지 않는다. 목록은 `@Valid PageQuery`로 받고 `PageResponse`로 준다
+- 요청 본문의 정수 필드(인원·ID 등)에 소수(2.7)가 오면 잘라 받지 않고 `400 INVALID_REQUEST`다 (`spring.jackson.deserialization.accept-float-as-int=false`). 자동 구성된 `RestClient`로 받는 외부 API 응답에도 같이 걸리므로, 소수로 올 수 있는 값(ODsay 거리 등)은 `double`·`BigDecimal` 필드로 받는다
 - 로그인 사용자: 컨트롤러 파라미터 `@LoginUserId Long userId` (없으면 `401 UNAUTHORIZED`). 인증 필터는 요청 속성 `LoginUserIdArgumentResolver.REQUEST_ATTRIBUTE`에 사용자 ID(Long)를 넣는다
 - 요청 언어: 컨트롤러 파라미터 `Language language`. 표시 텍스트는 `language.pick(ko, en)` (영문이 없으면 국문)
 - "오늘"·"지금"은 `Clock` 빈(서울)으로 정한다 (`LocalDate.now(clock)`). 기록 시각은 `SeoulTime.of(instant)`로 `+09:00`을 붙여 준다
