@@ -94,7 +94,50 @@ class CandidateTest {
 		assertThat(result).bodyJson().extractingPath("$.items[0].place.location.lat").isNotNull();
 	}
 
-	/** 카테고리를 하나도 고르지 않았으면 8개 전체이고, 테마가 맞는 장소는 없다 */
+	/** 축제·행사는 여행 기간과 겹치는 것만 남고, 날짜가 비어 있는 행사는 기간과 상관없이 남는다 */
+	@Test
+	void eventsMustOverlapTripDates() {
+		long tripId = createTrip("[\"EV\"]");
+		long laterEventId = jdbc.queryForObject("""
+				SELECT id FROM places WHERE class1_code = 'EV' AND event_start_date > '2026-11-12'
+				ORDER BY event_start_date, id LIMIT 1
+				""", Long.class);
+		long undatedEventId = jdbc.queryForObject("""
+				SELECT id FROM places WHERE class1_code = 'EV' AND event_start_date IS NULL AND event_end_date IS NULL
+				ORDER BY id LIMIT 1
+				""", Long.class);
+
+		assertThat(candidates(tripId, "size", "50")).bodyJson().extractingPath("$.items[*].place.placeId").asArray()
+				.contains((int) undatedEventId).doesNotContain((int) laterEventId);
+		MvcTestResult lastPage = candidates(tripId, "page", "2");
+		assertThat(lastPage).bodyJson().isLenientlyEqualTo("""
+				{"page": 2, "size": 5, "totalCount": 12, "hasNext": false}
+				""");
+		assertThat(lastPage).bodyJson().extractingPath("$.items[*].rank").isEqualTo(List.of(11, 12));
+	}
+
+	/** TourAPI에서 사라진 장소(active = false)는 빠진다 */
+	@Test
+	void leavesOutInactivePlaces() {
+		long tripId = createTrip("[\"HS\"]");
+		jdbc.update("UPDATE places SET active = false WHERE name_ko = '덕수궁'");
+
+		MvcTestResult result = candidates(tripId);
+
+		assertThat(result).bodyJson().extractingPath("$.items[*].place.nameKo").asArray().doesNotContain("덕수궁");
+		assertThat(result).bodyJson().extractingPath("$.totalCount").isEqualTo(226);
+	}
+
+	@Test
+	void placeWithoutPhotoHasNullImage() {
+		long tripId = createTrip("[\"HS\"]");
+
+		assertThat(candidates(tripId, "query", "몽촌토성")).bodyJson().isLenientlyEqualTo("""
+				{"totalCount": 1, "items": [{"place": {"nameKo": "몽촌토성", "image": null}}]}
+				""");
+	}
+
+	/** 카테고리를 하나도 고르지 않았으면 8개 전체이고 필터도 8개 중에서 고른다. 테마가 맞는 장소는 없다 */
 	@Test
 	void noChosenCategoryMeansAllEight() {
 		long tripId = createTrip("[]");
@@ -105,6 +148,8 @@ class CandidateTest {
 				.containsExactlyInAnyOrder("SH", "FD", "VE", "HS", "EV", "EX", "NA", "LS");
 		assertThat(result).bodyJson().extractingPath("$.items[*].reasons[*]").asArray()
 				.doesNotContain("CATEGORY_MATCH");
+		assertThat(candidates(tripId, "category", "FD")).hasStatusOk().bodyJson()
+				.extractingPath("$.items[*].place.category.code").asArray().containsOnly("FD");
 	}
 
 	@Test
@@ -162,6 +207,18 @@ class CandidateTest {
 
 		assertThat(candidates(tripId, "query", "%")).hasStatusOk().bodyJson()
 				.extractingPath("$.totalCount").isEqualTo(0);
+	}
+
+	/** 검색어 길이는 앞뒤 공백을 뺀 글자 수로 센다. 아주 큰 페이지는 빈 목록이다 */
+	@Test
+	void acceptsPaddedQueryAndHugePage() {
+		long tripId = createTrip("[\"HS\"]");
+
+		assertThat(candidates(tripId, "query", " " + "가".repeat(50) + " ")).hasStatusOk();
+		assertThat(candidates(tripId, "page", String.valueOf(Integer.MAX_VALUE))).hasStatusOk().bodyJson()
+				.isLenientlyEqualTo("""
+						{"items": [], "totalCount": 227, "hasNext": false}
+						""");
 	}
 
 	@Test

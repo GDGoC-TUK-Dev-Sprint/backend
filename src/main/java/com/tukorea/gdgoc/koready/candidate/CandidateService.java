@@ -33,34 +33,34 @@ class CandidateService {
 	private final CandidateRepository candidates;
 	private final CandidateProperties properties;
 
+	private static final List<String> ALL_CATEGORIES = Arrays.stream(Category.values()).map(Category::name).toList();
+
 	@Transactional(readOnly = true)
 	public CandidatePage find(Long userId, Long tripId, CandidateQuery query, Language language) {
 		Trip trip = tripService.findMyTrip(userId, tripId);
 		Set<String> chosen = trip.getCategories().stream()
 				.map(TripCategory::getClass1Code)
 				.collect(Collectors.toSet());
-		if (query.category() != null && !chosen.contains(query.category().name())) {
-			new FieldErrors().add("category", "이 여행에서 고른 카테고리가 아닙니다").throwIfAny();
+		// 추천 목록의 카테고리이자 필터로 고를 수 있는 카테고리: 고른 카테고리, 하나도 고르지 않았으면 8개 전체
+		Collection<String> listed = chosen.isEmpty() ? ALL_CATEGORIES : chosen;
+		String searchText = query.searchText();
+		FieldErrors errors = new FieldErrors();
+		if (query.category() != null && !listed.contains(query.category().name())) {
+			errors.add("category", "이 여행에서 고른 카테고리가 아닙니다");
 		}
+		if (searchText != null && searchText.codePointCount(0, searchText.length()) > CandidateQuery.MAX_QUERY_LENGTH) {
+			errors.add("query", CandidateQuery.MAX_QUERY_LENGTH + "자 이하로 찾을 수 있습니다");
+		}
+		errors.throwIfAny();
+		Collection<String> categories = query.category() != null ? List.of(query.category().name()) : listed;
 		CandidateRepository.Criteria criteria = new CandidateRepository.Criteria(trip.getId(), trip.getStartDate(),
-				trip.getEndDate(), categories(query, chosen), query.searchText(), properties.signalWeightM());
+				trip.getEndDate(), categories, searchText, properties.signalWeightM());
 		List<CandidateItem> items = candidates.find(criteria, query.offset(), query.size()).stream()
 				.map(row -> item(row, chosen, language))
 				.toList();
 		long totalCount = candidates.count(criteria);
 		return CandidatePage.of(guide(trip.getDays()),
 				PageResponse.of(items, query.page(), query.size(), totalCount));
-	}
-
-	/** 추천 목록의 카테고리: 필터 하나, 없으면 고른 카테고리, 하나도 고르지 않았으면 8개 전체 */
-	private static Collection<String> categories(CandidateQuery query, Set<String> chosen) {
-		if (query.category() != null) {
-			return List.of(query.category().name());
-		}
-		if (!chosen.isEmpty()) {
-			return chosen;
-		}
-		return Arrays.stream(Category.values()).map(Category::name).toList();
 	}
 
 	private CandidatePage.Guide guide(int days) {
@@ -81,13 +81,15 @@ class CandidateService {
 		if (chosen.contains(row.class1Code())) {
 			reasons.add(CandidateReason.CATEGORY_MATCH);
 		}
-		if (row.distanceM() <= properties.nearStayM()) {
+		// 태그는 응답에 보이는 거리(m, 반올림)로 정한다 (1000.4m가 "1000m"인데 1km 태그가 빠지지 않게)
+		long distanceM = Math.round(row.distanceM());
+		if (distanceM <= properties.nearStayM()) {
 			reasons.add(CandidateReason.NEAR_STAY);
 		}
 		List<SignalType> signals = row.signals().stream()
 				.map(SignalType::valueOf)
 				.sorted(Comparator.naturalOrder())
 				.toList();
-		return new CandidateItem(row.rank(), place, Math.round(row.distanceM()), reasons, signals, row.inTrip());
+		return new CandidateItem(row.rank(), place, distanceM, reasons, signals, row.inTrip());
 	}
 }

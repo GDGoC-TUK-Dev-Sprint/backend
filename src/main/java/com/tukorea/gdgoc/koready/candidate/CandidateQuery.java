@@ -6,21 +6,21 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
-import jakarta.validation.constraints.Size;
 
 /**
  * 장소 후보 쿼리. {@code size}는 기본 5다 (한 페이지 5곳).
  *
  * @param category 필터. 이 여행에서 고른 카테고리 중 하나이고, 없으면 전체
- * @param query 장소 이름 검색어. 있으면 카테고리 조건을 풀고 이름으로 찾는다
+ * @param query 장소 이름 검색어. 있으면 카테고리 조건을 풀고 이름으로 찾는다. 길이(앞뒤 공백을 뺀 글자 수)는 서비스가 검사한다
  */
 public record CandidateQuery(
 		Category category,
-		@Size(min = 1, max = 50) @Pattern(regexp = "(?s).*\\S.*", message = "공백만으로는 찾을 수 없습니다") String query,
+		@Pattern(regexp = "(?s).*\\S.*", message = "공백만으로는 찾을 수 없습니다") String query,
 		@PositiveOrZero Integer page,
 		@Min(1) @Max(PageQuery.MAX_SIZE) Integer size) {
 
 	public static final int DEFAULT_SIZE = 5;
+	public static final int MAX_QUERY_LENGTH = 50;
 
 	public CandidateQuery {
 		if (page == null) {

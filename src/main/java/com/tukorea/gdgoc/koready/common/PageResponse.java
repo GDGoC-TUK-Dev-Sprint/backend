@@ -10,7 +10,7 @@ import org.springframework.data.domain.Page;
 public record PageResponse<T>(List<T> items, int page, int size, long totalCount, boolean hasNext) {
 
 	public static <T> PageResponse<T> of(List<T> items, int page, int size, long totalCount) {
-		return new PageResponse<>(items, page, size, totalCount, (long) (page + 1) * size < totalCount);
+		return new PageResponse<>(items, page, size, totalCount, (page + 1L) * size < totalCount);
 	}
 
 	public static <T> PageResponse<T> of(List<T> items, PageQuery query, long totalCount) {
