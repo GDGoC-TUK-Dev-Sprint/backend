@@ -2,8 +2,8 @@ package com.tukorea.gdgoc.koready.loader;
 
 import static com.tukorea.gdgoc.koready.loader.TourApiFiles.text;
 
-import com.tukorea.gdgoc.koready.place.FeeType;
-import com.tukorea.gdgoc.koready.place.HoursType;
+import com.tukorea.gdgoc.koready.domain.place.entity.FeeType;
+import com.tukorea.gdgoc.koready.domain.place.entity.HoursType;
 import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;

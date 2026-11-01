@@ -2,7 +2,7 @@ package com.tukorea.gdgoc.koready.loader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.tukorea.gdgoc.koready.place.StayBasis;
+import com.tukorea.gdgoc.koready.domain.place.entity.StayBasis;
 import org.junit.jupiter.api.Test;
 
 class StayMinutesTest {

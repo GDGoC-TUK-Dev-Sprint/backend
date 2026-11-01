@@ -1,6 +1,6 @@
 package com.tukorea.gdgoc.koready.support;
 
-import com.tukorea.gdgoc.koready.common.SeoulTime;
+import com.tukorea.gdgoc.koready.global.util.SeoulTime;
 import java.time.Clock;
 import java.time.LocalDate;
 import org.springframework.boot.test.context.TestConfiguration;
