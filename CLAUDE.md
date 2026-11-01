@@ -21,6 +21,8 @@ KOREADY API 서버.
 - 여행을 다루는 API는 `TripService.findMyTrip(userId, tripId)`로 여행을 찾는다 (없거나 다른 사용자의 여행이면 `404 TRIP_NOT_FOUND`)
 - 여행 요약(Trip) 응답은 `trip` 패키지의 `TripService.toResponse`로 만든다 (지연 로딩이 있어 트랜잭션 안에서 부른다)
 - 장소는 `place.PlaceRepository`로 읽는다. 주소(국문)는 `Place.getAddress()`
+- 목록·카드·지도의 장소 요약(PlaceSummary·Image) 응답은 `place.PlaceSummary`를 쓴다
+- 하루 최대 장소 수·권장 장소 수는 `candidate.CandidateProperties`(`koready.candidate.*`)에서 읽는다
 
 ## 구현 규칙
 - 금액·영업시간·거리·이동시간은 DB 조회나 계산 코드에서 만든다. LLM 응답에서 숫자를 받아 그대로 저장하거나 반환하지 않는다
