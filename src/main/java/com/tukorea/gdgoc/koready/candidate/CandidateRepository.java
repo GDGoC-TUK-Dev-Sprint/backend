@@ -1,5 +1,6 @@
 package com.tukorea.gdgoc.koready.candidate;
 
+import com.tukorea.gdgoc.koready.common.SearchText;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -141,11 +142,6 @@ class CandidateRepository {
 				rs.getObject("rank", Long.class));
 	}
 
-	/** ILIKE 부분 일치 패턴. 검색어의 와일드카드 문자(%, _)와 이스케이프 문자(\)는 글자 그대로 찾는다 */
-	static String containsPattern(String text) {
-		return "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
-	}
-
 	/**
 	 * 후보를 찾는 조건.
 	 *
@@ -167,7 +163,7 @@ class CandidateRepository {
 					.addValue("endDate", endDate)
 					.addValue("signalWeightM", signalWeightM);
 			if (isSearch()) {
-				params.addValue("query", query).addValue("pattern", containsPattern(query));
+				params.addValue("query", query).addValue("pattern", SearchText.containsPattern(query));
 			} else {
 				params.addValue("categories", categories);
 			}

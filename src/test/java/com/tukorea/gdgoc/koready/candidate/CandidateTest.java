@@ -225,12 +225,15 @@ class CandidateTest {
 	void rejectsBadQueryAndPage() {
 		long tripId = createTrip("[\"HS\"]");
 
-		assertThat(candidates(tripId, "query", "   "))
-				.hasStatus(HttpStatus.BAD_REQUEST)
-				.bodyJson()
-				.isLenientlyEqualTo("""
-						{"code": "INVALID_REQUEST", "fields": [{"field": "query", "reason": "공백만으로는 찾을 수 없습니다"}]}
-						""");
+		// 전각 공백(U+3000)도 공백이다 (빈 검색어가 되어 모든 장소를 찾지 않는다)
+		for (String blank : List.of("   ", "　")) {
+			assertThat(candidates(tripId, "query", blank))
+					.hasStatus(HttpStatus.BAD_REQUEST)
+					.bodyJson()
+					.isLenientlyEqualTo("""
+							{"code": "INVALID_REQUEST", "fields": [{"field": "query", "reason": "공백만으로는 찾을 수 없습니다"}]}
+							""");
+		}
 		for (String[] params : List.of(
 				new String[] {"query", "가".repeat(51)},
 				new String[] {"query", ""},

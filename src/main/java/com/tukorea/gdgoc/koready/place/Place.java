@@ -187,6 +187,11 @@ public class Place {
 
 	/** 주소 (국문). 상세 주소(addr2)가 있으면 띄어 붙인다 */
 	public String getAddress() {
+		return address(addr1, addr2);
+	}
+
+	/** {@link #getAddress()}와 같은 주소를 JdbcTemplate으로 읽은 주소 칸에서 만든다 */
+	public static String address(String addr1, String addr2) {
 		if (addr2 == null || addr2.isBlank()) {
 			return addr1;
 		}
