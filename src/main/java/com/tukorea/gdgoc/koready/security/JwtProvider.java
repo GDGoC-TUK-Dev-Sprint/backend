@@ -1,4 +1,4 @@
-package com.tukorea.gdgoc.koready.global.auth;
+package com.tukorea.gdgoc.koready.security;
 
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;

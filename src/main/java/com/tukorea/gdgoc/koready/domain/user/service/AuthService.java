@@ -11,7 +11,7 @@ import com.tukorea.gdgoc.koready.domain.user.entity.User;
 import com.tukorea.gdgoc.koready.domain.user.repository.OauthAccountRepository;
 import com.tukorea.gdgoc.koready.domain.user.repository.RefreshTokenRepository;
 import com.tukorea.gdgoc.koready.domain.user.repository.UserRepository;
-import com.tukorea.gdgoc.koready.global.auth.JwtProvider;
+import com.tukorea.gdgoc.koready.security.JwtProvider;
 import com.tukorea.gdgoc.koready.global.auth.OauthIdTokenVerifier;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;

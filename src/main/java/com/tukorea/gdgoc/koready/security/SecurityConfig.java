@@ -1,4 +1,4 @@
-package com.tukorea.gdgoc.koready.config;
+package com.tukorea.gdgoc.koready.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,10 +29,6 @@ public class SecurityConfig {
             
         return http.build();
     }
-
-    // 비밀번호 암호화를 위한 인코더 등록
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
 }
+
+   

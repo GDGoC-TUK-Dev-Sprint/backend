@@ -1,5 +1,5 @@
 package com.tukorea.gdgoc.koready.global.auth;
-
+import com.tukorea.gdgoc.koready.security.JwtProvider;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
