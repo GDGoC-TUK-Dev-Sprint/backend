@@ -1,6 +1,6 @@
 package com.tukorea.gdgoc.koready.loader;
 
-import com.tukorea.gdgoc.koready.datalab.Industry;
+import com.tukorea.gdgoc.koready.domain.datalab.entity.Industry;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;

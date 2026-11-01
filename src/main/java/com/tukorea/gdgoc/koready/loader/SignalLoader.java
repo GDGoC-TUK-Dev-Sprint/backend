@@ -2,7 +2,7 @@ package com.tukorea.gdgoc.koready.loader;
 
 import static com.tukorea.gdgoc.koready.loader.TourApiFiles.text;
 
-import com.tukorea.gdgoc.koready.place.SignalType;
+import com.tukorea.gdgoc.koready.domain.place.entity.SignalType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;

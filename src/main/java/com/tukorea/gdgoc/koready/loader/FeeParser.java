@@ -1,7 +1,7 @@
 package com.tukorea.gdgoc.koready.loader;
 
-import com.tukorea.gdgoc.koready.place.FeeAudience;
-import com.tukorea.gdgoc.koready.place.FeeType;
+import com.tukorea.gdgoc.koready.domain.place.entity.FeeAudience;
+import com.tukorea.gdgoc.koready.domain.place.entity.FeeType;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;

@@ -1,6 +1,6 @@
 package com.tukorea.gdgoc.koready.loader;
 
-import com.tukorea.gdgoc.koready.place.StayBasis;
+import com.tukorea.gdgoc.koready.domain.place.entity.StayBasis;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;

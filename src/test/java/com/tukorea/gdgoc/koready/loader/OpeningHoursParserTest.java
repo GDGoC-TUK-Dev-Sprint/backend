@@ -2,9 +2,9 @@ package com.tukorea.gdgoc.koready.loader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tukorea.gdgoc.koready.domain.place.entity.HoursType;
 import com.tukorea.gdgoc.koready.loader.OpeningHoursParser.Result;
 import com.tukorea.gdgoc.koready.loader.OpeningHoursParser.Row;
-import com.tukorea.gdgoc.koready.place.HoursType;
 import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;

@@ -2,9 +2,9 @@ package com.tukorea.gdgoc.koready.loader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tukorea.gdgoc.koready.domain.place.entity.FeeAudience;
+import com.tukorea.gdgoc.koready.domain.place.entity.FeeType;
 import com.tukorea.gdgoc.koready.loader.FeeParser.Fee;
-import com.tukorea.gdgoc.koready.place.FeeAudience;
-import com.tukorea.gdgoc.koready.place.FeeType;
 import org.junit.jupiter.api.Test;
 
 class FeeParserTest {

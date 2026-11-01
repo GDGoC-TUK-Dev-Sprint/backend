@@ -1,6 +1,6 @@
 package com.tukorea.gdgoc.koready.loader;
 
-import com.tukorea.gdgoc.koready.place.HoursType;
+import com.tukorea.gdgoc.koready.domain.place.entity.HoursType;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
