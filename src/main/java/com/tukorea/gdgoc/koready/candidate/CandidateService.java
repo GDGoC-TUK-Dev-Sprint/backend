@@ -5,6 +5,7 @@ import com.tukorea.gdgoc.koready.common.FieldErrors;
 import com.tukorea.gdgoc.koready.common.Language;
 import com.tukorea.gdgoc.koready.common.LatLng;
 import com.tukorea.gdgoc.koready.common.PageResponse;
+import com.tukorea.gdgoc.koready.common.SearchText;
 import com.tukorea.gdgoc.koready.meta.Category;
 import com.tukorea.gdgoc.koready.place.PlaceSummary;
 import com.tukorea.gdgoc.koready.place.SignalType;
@@ -43,14 +44,13 @@ class CandidateService {
 				.collect(Collectors.toSet());
 		// 추천 목록의 카테고리이자 필터로 고를 수 있는 카테고리: 고른 카테고리, 하나도 고르지 않았으면 8개 전체
 		Collection<String> listed = chosen.isEmpty() ? ALL_CATEGORIES : chosen;
-		String searchText = query.searchText();
 		FieldErrors errors = new FieldErrors();
 		if (query.category() != null && !listed.contains(query.category().name())) {
 			errors.add("category", "이 여행에서 고른 카테고리가 아닙니다");
 		}
-		if (searchText != null && searchText.codePointCount(0, searchText.length()) > CandidateQuery.MAX_QUERY_LENGTH) {
-			errors.add("query", CandidateQuery.MAX_QUERY_LENGTH + "자 이하로 찾을 수 있습니다");
-		}
+		// 검색이면 앞뒤 공백을 뺀 검색어, 추천 목록이면 null
+		String searchText = query.query() == null ? null
+				: SearchText.strip(query.query(), "query", CandidateQuery.MAX_QUERY_LENGTH, errors);
 		errors.throwIfAny();
 		Collection<String> categories = query.category() != null ? List.of(query.category().name()) : listed;
 		CandidateRepository.Criteria criteria = new CandidateRepository.Criteria(trip.getId(), trip.getStartDate(),

@@ -20,7 +20,7 @@ KOREADY API 서버.
 - 국적·카테고리·지역 14개(중심 좌표)는 `meta` 패키지의 `Nationality`·`Category`·`Area`를 쓴다
 - 여행을 다루는 API는 `TripService.findMyTrip(userId, tripId)`로 여행을 찾는다 (없거나 다른 사용자의 여행이면 `404 TRIP_NOT_FOUND`)
 - 여행 요약(Trip) 응답은 `trip` 패키지의 `TripService.toResponse`로 만든다 (지연 로딩이 있어 트랜잭션 안에서 부른다)
-- 장소는 `place.PlaceRepository`로 읽는다. 주소(국문)는 `Place.getAddress()`
+- 장소는 `place.PlaceRepository`로 읽는다. 주소(국문)는 `Place.getAddress()`, JdbcTemplate으로 읽은 행은 `Place.address(addr1, addr2)`
 - 목록·카드·지도의 장소 요약(PlaceSummary·Image) 응답은 `place.PlaceSummary`를 쓴다
 - 하루 최대 장소 수·권장 장소 수는 `candidate.CandidateProperties`(`koready.candidate.*`)에서 읽는다
 
@@ -30,11 +30,13 @@ KOREADY API 서버.
 - 경비 응답은 항목별 범위(최소~최대)와 근거 데이터 출처를 함께 내려준다
 - 엔티티·API 필드 이름은 서비스 용어(Trip, TripDay, TripItem, Leg, Place)를 그대로 쓴다
 - 장소 추천·검색 쿼리는 `place_classes.excluded = true`인 분류의 장소를 뺀다
+- 한글 이름순 정렬은 `ORDER BY name_ko COLLATE "C"`(코드 포인트 순 = 가나다순)로 한다. DB 기본 정렬(en_US.utf8)은 한글을 가나다순으로 두지 않는다
 
 ## 공통 기반 (`common` 패키지)
 API를 만들 때 따로 만들지 말고 이것을 쓴다.
 - 오류: `throw new ApiException(ErrorCode.X)`. 응답 `{code, message, fields}`는 `GlobalExceptionHandler`가 만든다. 서비스에서 입력을 검사할 때는 `FieldErrors`로 모아 한 번에 `400 INVALID_REQUEST`를 던진다
 - 성공 응답은 감싸지 않는다. 목록은 `@Valid PageQuery`로 받고 `PageResponse`로 준다
+- 이름·주소 검색어: `SearchText.strip(query, field, maxLength, errors)`가 앞뒤 공백(전각 공백 포함)을 빼고, 공백만이거나 길이(코드 포인트)를 넘으면 `FieldErrors`에 넣는다. ILIKE 패턴은 `SearchText.containsPattern(text)` (`%`·`_`를 글자 그대로 찾는다)
 - 요청 본문의 정수 필드(인원·ID 등)에 소수(2.7)가 오면 잘라 받지 않고 `400 INVALID_REQUEST`다 (`spring.jackson.deserialization.accept-float-as-int=false`). 자동 구성된 `RestClient`로 받는 외부 API 응답에도 같이 걸리므로, 소수로 올 수 있는 값(ODsay 거리 등)은 `double`·`BigDecimal` 필드로 받는다
 - 로그인 사용자: 컨트롤러 파라미터 `@LoginUserId Long userId` (없으면 `401 UNAUTHORIZED`). 인증 필터는 요청 속성 `LoginUserIdArgumentResolver.REQUEST_ATTRIBUTE`에 사용자 ID(Long)를 넣는다
 - 요청 언어: 컨트롤러 파라미터 `Language language`. 표시 텍스트는 `language.pick(ko, en)` (영문이 없으면 국문)
