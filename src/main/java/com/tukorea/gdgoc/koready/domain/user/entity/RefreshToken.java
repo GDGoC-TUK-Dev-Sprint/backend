@@ -55,4 +55,13 @@ public class RefreshToken {
 	@CreationTimestamp
 	@Column(nullable = false)
 	private Instant createdAt;
+
+	// [auth] 추가: 리프레시 토큰 생성
+	public static RefreshToken of(User user, String tokenHash, Instant expiresAt) {
+		RefreshToken token = new RefreshToken();
+		token.user = user;
+		token.tokenHash = tokenHash;
+		token.expiresAt = expiresAt;
+		return token;
+	}
 }
