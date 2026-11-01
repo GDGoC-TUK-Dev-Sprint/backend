@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,5 +33,12 @@ class TripController {
 	@GetMapping("/api/trips/{tripId}")
 	TripResponse get(@LoginUserId Long userId, @PathVariable Long tripId, Language language) {
 		return tripService.get(userId, tripId, language);
+	}
+
+	/** 조건 다시 저장: 장소 선택의 조건 요약 "변경"으로 조건 입력에 돌아가 다시 "이 조건으로 여행 계획 생성하기" */
+	@PutMapping("/api/trips/{tripId}")
+	TripResponse update(@LoginUserId Long userId, @PathVariable Long tripId, @Valid @RequestBody TripRequest request,
+			Language language) {
+		return tripService.update(userId, tripId, request, language);
 	}
 }

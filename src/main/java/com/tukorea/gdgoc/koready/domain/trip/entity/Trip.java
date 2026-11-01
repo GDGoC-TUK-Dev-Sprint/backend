@@ -1,7 +1,11 @@
 package com.tukorea.gdgoc.koready.domain.trip.entity;
 
+import com.tukorea.gdgoc.koready.domain.meta.entity.Area;
+import com.tukorea.gdgoc.koready.domain.meta.entity.Category;
 import com.tukorea.gdgoc.koready.domain.place.entity.Place;
 import com.tukorea.gdgoc.koready.domain.user.entity.User;
+import com.tukorea.gdgoc.koready.global.exception.ApiException;
+import com.tukorea.gdgoc.koready.global.exception.ErrorCode;
 import jakarta.persistence.CheckConstraint;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -21,8 +25,11 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -138,6 +145,24 @@ public class Trip {
 		return trip;
 	}
 
+	/**
+	 * 조건을 모두 바꾼다 (조건 다시 저장). 확정한 여행은 바꿀 수 없다 ({@code 409 TRIP_CONFIRMED}).
+	 * 기간이나 숙소가 바뀌면 만든 동선이 맞지 않으므로, 동선을 만들 때 생긴 제목도 지운다.
+	 *
+	 * @return 기간이나 숙소가 바뀌어 동선(일자)을 지워야 하면 true. 일자는 부르는 쪽이 지운다
+	 */
+	public boolean changeConditions(TripConditions conditions) {
+		requireEditable();
+		boolean routeOutdated = !startDate.equals(conditions.startDate()) || !endDate.equals(conditions.endDate())
+				|| !isSameStay(conditions.stay());
+		apply(conditions);
+		if (routeOutdated) {
+			titleKo = null;
+			titleEn = null;
+		}
+		return routeOutdated;
+	}
+
 	/** 여행 일수 (2박 3일이면 3) */
 	public int getDays() {
 		return countDays(startDate, endDate);
@@ -151,6 +176,18 @@ public class Trip {
 	/** 확정한 여행은 편집할 수 없다 */
 	public boolean isEditable() {
 		return status == TripStatus.DRAFT;
+	}
+
+	/** 편집할 수 있는 여행인지 확인한다. 확정한 여행이면 {@code 409 TRIP_CONFIRMED} (동선 만들기·순서 변경·장소 삭제도 쓴다) */
+	public void requireEditable() {
+		if (!isEditable()) {
+			throw new ApiException(ErrorCode.TRIP_CONFIRMED);
+		}
+	}
+
+	/** 고른 카테고리. 컬렉션을 직접 바꾸지 않게 읽기 전용으로 준다 (바꾸기는 {@link #changeConditions}) */
+	public Set<TripCategory> getCategories() {
+		return Collections.unmodifiableSet(categories);
 	}
 
 	/** 그날(서울 날짜) 기준 진행 상태 */
@@ -170,12 +207,41 @@ public class Trip {
 		TripConditions.Stay stay = conditions.stay();
 		stayType = stay.type();
 		stayPlace = stay.place();
-		stayAreaCode = stay.area() == null ? null : stay.area().name();
+		stayAreaCode = codeOf(stay.area());
 		stayName = stay.name();
 		stayAddress = truncate(stay.address(), STAY_ADDRESS_LENGTH);
 		stayLocation = stay.location();
-		categories.clear();
-		conditions.categories().forEach(category -> categories.add(new TripCategory(category.name())));
+		replaceCategories(conditions.categories());
+	}
+
+	/**
+	 * 고른 카테고리. 바뀌었을 때만 컬렉션을 새로 둔다 (Hibernate가 옛 행을 여행 ID로 한 번에 지우고 새 행을 넣는다).
+	 * 원소를 하나씩 빼고 넣으면 행 삭제 SQL에 같은 열(class1_code, 장소 분류 연관과 같이 씀)이 두 번 들어가 실패한다.
+	 */
+	private void replaceCategories(Set<Category> chosen) {
+		Set<TripCategory> next = chosen.stream()
+				.map(category -> new TripCategory(category.name()))
+				.collect(Collectors.toCollection(HashSet::new));
+		if (!next.equals(categories)) {
+			categories = next;
+		}
+	}
+
+	/** 지금 숙소와 같은지. 정한 방식·장소·지역·좌표가 모두 같아야 한다 (장소 정보가 바뀌어 이름·주소만 달라진 것은 같은 숙소다) */
+	private boolean isSameStay(TripConditions.Stay stay) {
+		return stayType == stay.type()
+				&& Objects.equals(idOf(stayPlace), idOf(stay.place()))
+				&& Objects.equals(stayAreaCode, codeOf(stay.area()))
+				&& stayLocation.equalsExact(stay.location());
+	}
+
+	/** 장소 ID. 지연 로딩 프록시여도 ID만 읽어 장소를 조회하지 않는다 */
+	private static Long idOf(Place place) {
+		return place == null ? null : place.getId();
+	}
+
+	private static String codeOf(Area area) {
+		return area == null ? null : area.name();
 	}
 
 	/** 글자 수로 자른다. PostgreSQL varchar(n)이 글자(코드 포인트) 수로 세므로 UTF-16 두 칸인 글자를 반으로 가르지 않는다 */
