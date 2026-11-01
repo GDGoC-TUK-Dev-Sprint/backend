@@ -21,4 +21,12 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
 	/** 동선을 만들었는지 (일자가 있는지) */
 	@Query("select count(d) > 0 from TripDay d where d.trip.id = :tripId")
 	boolean hasDays(Long tripId);
+
+	/**
+	 * 동선(일자)을 지운다. 딸린 일정 항목·이동 구간은 DB가 함께 지운다 (ON DELETE CASCADE).
+	 * SQL로 바로 지우므로, 이미 읽어 둔 일자·일정 항목 엔티티는 영속성 컨텍스트에 남는다 (읽기 전에 부른다)
+	 */
+	@Modifying
+	@Query("delete from TripDay d where d.trip.id = :tripId")
+	void deleteDays(Long tripId);
 }

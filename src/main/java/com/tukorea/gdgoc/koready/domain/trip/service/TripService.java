@@ -43,7 +43,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 여행 만들기와 여행 요약. 여행을 다루는 다른 API도 내 여행은 {@link #findMyTrip}으로 찾고,
+ * 여행 만들기·조건 다시 저장·여행 요약. 여행을 다루는 다른 API도 내 여행은 {@link #findMyTrip}으로 찾고,
  * 응답에 여행 요약을 넣을 때는 {@link #toResponse}를 쓴다.
  */
 @Service
@@ -69,16 +69,30 @@ public class TripService {
 	public TripResponse create(Long userId, TripRequest request, Language language) {
 		LocalDate today = LocalDate.now(clock);
 		TripConditions conditions = conditions(request, today);
-		User user = entityManager.find(User.class, userId, LockModeType.PESSIMISTIC_WRITE);
-		if (user == null) {
-			throw new ApiException(ErrorCode.UNAUTHORIZED);
-		}
+		User user = lockUser(userId);
 		List<Long> activeTripIds = trips.findActiveTripIds(userId, today);
 		if (!activeTripIds.isEmpty()) {
 			throw new ApiException(ErrorCode.ACTIVE_TRIP_EXISTS, Map.of("activeTripId", activeTripIds.getFirst()));
 		}
 		trips.deleteDrafts(userId);
 		Trip trip = trips.save(Trip.create(user, conditions));
+		return toResponse(trip, language);
+	}
+
+	/**
+	 * 조건을 다시 저장한다 (요청 본문은 여행 만들기와 같고 전체를 바꾼다). 끝나지 않은 확정 여행 확인은 하지 않는다.
+	 * 기간이나 숙소가 바뀌면 만든 동선(일자·일정 항목·이동 구간)을 지운다. 만들기처럼 사용자 행을 잠근다.
+	 * 여행이 없거나(404) 확정했으면(409) 요청 값을 보기 전에 거절한다.
+	 */
+	@Transactional
+	public TripResponse update(Long userId, Long tripId, TripRequest request, Language language) {
+		lockUser(userId);
+		Trip trip = findMyTrip(userId, tripId);
+		trip.requireEditable();
+		TripConditions conditions = conditions(request, LocalDate.now(clock));
+		if (trip.changeConditions(conditions)) {
+			trips.deleteDays(trip.getId());
+		}
 		return toResponse(trip, language);
 	}
 
@@ -120,6 +134,18 @@ public class TripService {
 				stay(trip, language),
 				trips.hasDays(trip.getId()),
 				SeoulTime.of(trip.getConfirmedAt()));
+	}
+
+	/**
+	 * 같은 사용자의 여행 요청(만들기·조건 다시 저장)이 겹치지 않게 사용자 행을 잠근다. 잠그지 않으면 겹친 요청끼리
+	 * 한쪽 변경이 덮어써지거나 확정 전 여행이 둘이 될 수 있다. 사용자가 없으면(탈퇴) {@code 401}이다.
+	 */
+	private User lockUser(Long userId) {
+		User user = entityManager.find(User.class, userId, LockModeType.PESSIMISTIC_WRITE);
+		if (user == null) {
+			throw new ApiException(ErrorCode.UNAUTHORIZED);
+		}
+		return user;
 	}
 
 	/** 요청을 검사해 저장할 조건으로 바꾼다. 잘못된 입력을 모두 모아 400을 던진 뒤 숙소를 찾는다 */

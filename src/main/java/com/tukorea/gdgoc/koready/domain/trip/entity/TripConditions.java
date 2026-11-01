@@ -9,7 +9,8 @@ import java.util.Set;
 import org.locationtech.jts.geom.Point;
 
 /**
- * 검사를 마친 여행 조건. 희망 예산은 원화다.
+ * 검사를 마친 여행 조건. 희망 예산은 원화다. {@code TripService}가 요청을 검사해 만든다
+ * (다른 도메인은 여행을 만들거나 바꿀 때 {@code TripService}를 부른다).
  */
 public record TripConditions(
 		Nationality nationality,

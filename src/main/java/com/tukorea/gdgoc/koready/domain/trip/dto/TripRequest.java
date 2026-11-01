@@ -11,7 +11,8 @@ import java.time.LocalDate;
 import java.util.Set;
 
 /**
- * 여행 조건 요청 본문 (16 여행 만들기). 날짜·인원 범위, 희망 예산 통화, 숙소 종류별 필수 값은 {@code TripService}가 검사한다.
+ * 여행 조건 요청 본문 (16 여행 만들기·19 조건 다시 저장). 날짜·인원 범위, 희망 예산 통화, 숙소 종류별 필수 값은
+ * {@code TripService}가 검사한다.
  */
 public record TripRequest(
 		@NotNull Nationality nationality,
