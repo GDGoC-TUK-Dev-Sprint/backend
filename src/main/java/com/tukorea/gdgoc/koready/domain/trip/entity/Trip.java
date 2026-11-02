@@ -251,4 +251,10 @@ public class Trip {
 		}
 		return value.substring(0, value.offsetByCodePoints(0, maxLength));
 	}
+	// [expense] 추가: 여행 확정 (확정한 여행은 편집할 수 없다)
+	public void confirm(Instant now) {
+		requireEditable();
+		status = TripStatus.CONFIRMED;
+		confirmedAt = now;
+	}
 }

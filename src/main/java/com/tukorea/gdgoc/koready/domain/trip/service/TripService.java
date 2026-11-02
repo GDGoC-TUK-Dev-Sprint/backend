@@ -258,4 +258,16 @@ public class TripService {
 	private static <E extends Enum<E>> Optional<E> find(Class<E> type, String code) {
 		return Arrays.stream(type.getEnumConstants()).filter(constant -> constant.name().equals(code)).findFirst();
 	}
+	// [expense] 추가: 여행 확정. 동선을 만들기 전이면 409 ROUTE_NOT_CREATED, 이미 확정했으면 409 TRIP_CONFIRMED
+	@Transactional
+	public Trip confirm(Long userId, Long tripId) {
+		lockUser(userId);
+		Trip trip = findMyTrip(userId, tripId);
+		trip.requireEditable();
+		if (!trips.hasDays(trip.getId())) {
+			throw new ApiException(ErrorCode.ROUTE_NOT_CREATED);
+		}
+		trip.confirm(clock.instant());
+		return trip;
+	}
 }
