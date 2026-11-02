@@ -21,11 +21,9 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             // JWT를 사용하므로 세션을 Stateless로 설정
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            // 엔드포인트 접근 권한 설정
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**").permitAll() // 로그인, 회원가입 API는 접근 허용
-                .anyRequest().authenticated() // 나머지는 인증 필요
-            );
+            // 엔드포인트 접근 권한: Security는 모든 요청을 통과시키고, 로그인 확인은 @LoginUserId 리졸버가 한다
+            // (JwtLoginUserFilter가 넣은 사용자 ID가 없으면 401 UNAUTHORIZED). 로그인이 필요 없는 API를 여기에 따로 적지 않는다
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
             
         return http.build();
     }
