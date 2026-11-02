@@ -72,4 +72,20 @@ public class Leg {
 	@ColumnDefault("true")
 	@Column(nullable = false)
 	private boolean estimated = true;
+
+	/** 일자의 이동 구간을 만든다. {@code fromItem}·{@code toItem}이 null이면 숙소다 */
+	public static Leg create(TripDay tripDay, int seq, TripItem fromItem, TripItem toItem, LegMode mode, int distanceM,
+			int durationMinutes, Integer fareKrw, boolean estimated) {
+		Leg leg = new Leg();
+		leg.tripDay = tripDay;
+		leg.seq = (short) seq;
+		leg.fromItem = fromItem;
+		leg.toItem = toItem;
+		leg.mode = mode;
+		leg.distanceM = distanceM;
+		leg.durationMinutes = (short) durationMinutes;
+		leg.fareKrw = fareKrw;
+		leg.estimated = estimated;
+		return leg;
+	}
 }

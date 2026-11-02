@@ -70,4 +70,15 @@ public class TripItem {
 
 	@Column(nullable = false)
 	private Short stayMinutes;
+
+	/** 방문 순서만 바꾼다 (행을 다시 넣지 않아 ID가 그대로다) */
+	public void changeSeq(int seq) {
+		this.seq = (short) seq;
+	}
+
+	/** 도착·출발 시각을 기록한다 (이동시간과 체류시간을 이어 붙여 정한다) */
+	public void schedule(LocalTime arriveTime, LocalTime departTime) {
+		this.arriveTime = arriveTime;
+		this.departTime = departTime;
+	}
 }
