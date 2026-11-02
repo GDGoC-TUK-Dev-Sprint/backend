@@ -1,5 +1,6 @@
 package com.tukorea.gdgoc.koready.domain.candidate.repository;
 
+import com.tukorea.gdgoc.koready.domain.place.repository.PlaceSql;
 import com.tukorea.gdgoc.koready.global.util.SearchText;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -24,11 +25,10 @@ public class CandidateRepository {
 	private static final String SCOPE = """
 			p.active
 			    AND p.class1_code <> 'AC'
-			    AND NOT EXISTS (SELECT 1 FROM place_classes x
-			                    WHERE x.excluded AND x.code IN (p.class1_code, p.class2_code, p.class3_code))
+			    AND %s
 			    AND (p.event_end_date IS NULL OR p.event_end_date >= :startDate)
 			    AND (p.event_start_date IS NULL OR p.event_start_date <= :endDate)
-			""";
+			""".formatted(PlaceSql.NOT_EXCLUDED);
 	private static final String IN_CATEGORIES = SCOPE + "    AND p.class1_code IN (:categories)\n";
 	private static final String NAME_MATCHES = SCOPE + "    AND (p.name_ko ILIKE :pattern OR p.name_en ILIKE :pattern)\n";
 
