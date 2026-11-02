@@ -54,4 +54,20 @@ public class User {
 	@UpdateTimestamp
 	@Column(nullable = false)
 	private Instant updatedAt;
+
+	// [auth] 추가: 아이디·비밀번호 계정 생성
+	public static User ofLocal(String loginId, String passwordHash, String name) {
+		User user = new User();
+		user.loginId = loginId;
+		user.passwordHash = passwordHash;
+		user.name = name;
+		return user;
+	}
+
+	// [auth] 추가: 소셜 계정용 사용자 생성 (아이디·비밀번호 없음, 이름은 없을 수 있음)
+	public static User ofSocial(String name) {
+		User user = new User();
+		user.name = name;
+		return user;
+	}
 }

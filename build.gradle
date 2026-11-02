@@ -22,6 +22,11 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-restclient'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	// [auth] 추가: 비밀번호 BCrypt, JWT 발급·Google/Apple ID 토큰 검증
+	implementation 'org.springframework.security:spring-security-crypto'
+	implementation 'com.nimbusds:nimbus-jose-jwt'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	implementation 'org.hibernate.orm:hibernate-spatial'

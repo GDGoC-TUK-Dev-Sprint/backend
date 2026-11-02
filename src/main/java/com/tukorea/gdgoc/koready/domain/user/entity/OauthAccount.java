@@ -56,4 +56,13 @@ public class OauthAccount {
 	@CreationTimestamp
 	@Column(nullable = false)
 	private Instant createdAt;
+
+	// [auth] 추가: 소셜 계정 생성
+	public static OauthAccount of(User user, OauthProvider provider, String subject) {
+		OauthAccount account = new OauthAccount();
+		account.user = user;
+		account.provider = provider;
+		account.subject = subject;
+		return account;
+	}
 }
