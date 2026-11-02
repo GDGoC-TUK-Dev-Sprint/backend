@@ -27,6 +27,14 @@ public class ApiException extends RuntimeException {
 		this(errorCode, errorCode.getMessage(), List.of(), extra);
 	}
 
+	/** 외부 API 실패처럼 원인 예외가 있는 오류. 원인은 서버 로그에만 남고 응답에는 나가지 않는다 */
+	public ApiException(ErrorCode errorCode, String message, Throwable cause) {
+		super(message, cause);
+		this.errorCode = errorCode;
+		this.fields = List.of();
+		this.extra = Map.of();
+	}
+
 	private ApiException(ErrorCode errorCode, String message, List<ErrorBody.Field> fields, Map<String, Object> extra) {
 		super(message);
 		this.errorCode = errorCode;
