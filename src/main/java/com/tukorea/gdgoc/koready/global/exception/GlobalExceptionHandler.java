@@ -1,9 +1,14 @@
 package com.tukorea.gdgoc.koready.global.exception;
 
+import java.net.URLDecoder;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tomcat.util.http.InvalidParameterException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.core.MethodParameter;
@@ -22,6 +27,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -45,6 +51,19 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		}
 		return ResponseEntity.status(code.getStatus())
 				.body(new ErrorBody(code.name(), e.getMessage(), e.getFields(), e.getExtra()));
+	}
+
+	/**
+	 * Tomcat이 쿼리 문자열을 UTF-8로 풀지 못한 요청 (CP949로 보낸 한글 등). 파라미터를 처음 읽을 때 던진다.
+	 * 400이 아닌 것(폼 본문이 너무 크면 413)은 상태를 그대로 둔다
+	 */
+	@ExceptionHandler(InvalidParameterException.class)
+	ResponseEntity<Object> handleInvalidParameter(InvalidParameterException e, ServletWebRequest request) {
+		if (e.getErrorCode() != HttpStatus.BAD_REQUEST.value()) {
+			return handleExceptionInternal(e, null, new HttpHeaders(), HttpStatusCode.valueOf(e.getErrorCode()), request);
+		}
+		String name = undecodableParameter(request.getRequest().getQueryString());
+		return invalid(name == null ? List.of() : List.of(new ErrorBody.Field(name, BAD_FORMAT)));
 	}
 
 	@ExceptionHandler(Exception.class)
@@ -149,6 +168,34 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 			return header.name().isEmpty() ? header.value() : header.name();
 		}
 		return parameter.getParameterName();
+	}
+
+	/** 쿼리 문자열에서 UTF-8로 풀리지 않는 첫 파라미터 이름. 이름까지 깨졌거나 쿼리에서 못 찾으면 null */
+	private static String undecodableParameter(String query) {
+		if (query == null) {
+			return null;
+		}
+		for (String pair : query.split("&")) {
+			int eq = pair.indexOf('=');
+			String name = strictDecode(eq < 0 ? pair : pair.substring(0, eq));
+			if (name == null) {
+				return null;
+			}
+			if (eq >= 0 && strictDecode(pair.substring(eq + 1)) == null) {
+				return name;
+			}
+		}
+		return null;
+	}
+
+	/** 퍼센트 인코딩을 풀어 UTF-8로 읽는다. {@code %} 표기가 틀렸거나 UTF-8이 아닌 바이트면 null */
+	private static String strictDecode(String encoded) {
+		try {
+			byte[] bytes = URLDecoder.decode(encoded, StandardCharsets.ISO_8859_1).getBytes(StandardCharsets.ISO_8859_1);
+			return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString();
+		} catch (IllegalArgumentException | CharacterCodingException e) {
+			return null;
+		}
 	}
 
 	/** Jackson 오류에서 필드 경로를 꺼낸다 ({@code stay.type}, {@code categories[1]}). 문법 오류처럼 경로가 없으면 null */
