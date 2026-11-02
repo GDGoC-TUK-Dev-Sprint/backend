@@ -264,7 +264,8 @@ public class TripService {
 				.toList();
 	}
 
-	private static TripResponse.Stay stay(Trip trip, Language language) {
+	/** 여행의 숙소. 일자별 일정(TripDayService)도 같은 이름·좌표를 쓴다 */
+	static TripResponse.Stay stay(Trip trip, Language language) {
 		Place place = trip.getStayPlace();
 		// 지도 핀이면 저장한 핀 주소, 목록에서 빠진 지역이면 저장한 지역 이름(국문)
 		String nameKo = trip.getStayName();
