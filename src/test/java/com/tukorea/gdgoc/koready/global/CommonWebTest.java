@@ -17,16 +17,20 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import org.apache.tomcat.util.http.InvalidParameterException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @IntegrationTest
@@ -133,11 +137,58 @@ class CommonWebTest {
 	}
 
 	@Test
+	void queryNotInUtf8IsInvalidRequest() {
+		// CP949 "명동역"
+		assertThat(mvc.get().uri("/test/common/search").with(tomcatRejects("page=1&query=%B8%ED%B5%BF%BF%AA", 400)))
+				.hasStatus(HttpStatus.BAD_REQUEST)
+				.bodyJson()
+				.isLenientlyEqualTo("""
+						{"code": "INVALID_REQUEST", "fields": [{"field": "query", "reason": "형식이 맞지 않습니다"}]}
+						""");
+		assertThat(mvc.get().uri("/test/common/search").with(tomcatRejects("query=%ZZ", 400)))
+				.bodyJson()
+				.isLenientlyEqualTo("""
+						{"code": "INVALID_REQUEST", "fields": [{"field": "query"}]}
+						""");
+		assertThat(mvc.get().uri("/test/common/search").with(tomcatRejects(null, 413)))
+				.hasStatus(HttpStatus.CONTENT_TOO_LARGE);
+	}
+
+	@Test
 	void recordTimeHasSeoulOffset() {
 		assertThat(mvc.get().uri("/test/common/time"))
 				.hasStatusOk()
 				.bodyJson()
 				.extractingPath("$.at").isEqualTo("2026-10-31T14:00:00+09:00");
+	}
+
+	/**
+	 * {@code @RequestParam}을 읽으면 Tomcat처럼 {@link InvalidParameterException}을 던지는 요청.
+	 * MockMvc는 UTF-8이 아닌 바이트를 대체 문자로 풀어 이 예외가 나지 않는다.
+	 * 결과 출력이 {@code getParameterMap}을 읽으므로 그것은 두고 {@code getParameter}·{@code getParameterValues}만 던진다
+	 */
+	private static RequestPostProcessor tomcatRejects(String query, int errorCode) {
+		return request -> {
+			MockHttpServletRequest rejecting = new MockHttpServletRequest(request.getServletContext(), request.getMethod(),
+					request.getRequestURI()) {
+
+				@Override
+				public String getParameter(String name) {
+					throw rejected();
+				}
+
+				@Override
+				public String[] getParameterValues(String name) {
+					throw rejected();
+				}
+
+				private InvalidParameterException rejected() {
+					return new InvalidParameterException("Character decoding failed", errorCode);
+				}
+			};
+			rejecting.setQueryString(query);
+			return rejecting;
+		};
 	}
 
 	@RestController
@@ -165,6 +216,11 @@ class CommonWebTest {
 		@GetMapping("/me")
 		Map<String, Object> me(@LoginUserId Long userId, Language language) {
 			return Map.of("userId", userId, "language", language);
+		}
+
+		@GetMapping("/search")
+		Map<String, String> search(@RequestParam String query) {
+			return Map.of("query", query);
 		}
 
 		@GetMapping("/time")
