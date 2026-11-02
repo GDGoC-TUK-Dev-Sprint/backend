@@ -39,7 +39,7 @@ KOREADY API 서버.
 ## 구현 규칙
 - 경비 응답은 항목별 범위(최소~최대)와 근거 데이터 출처를 함께 내려준다
 - 엔티티·API 필드·클래스 이름은 서비스 용어(Trip, TripDay, TripItem, Leg, Place)를 그대로 쓰고, 클래스에는 계층 접미사(`~Controller`·`~Service`·`~Repository`·`~Request`·`~Response`·`~Properties`)를 붙인다
-- 장소 추천·검색 쿼리는 `place_classes.excluded = true`인 분류의 장소를 뺀다
+- 장소 추천·검색 쿼리는 `place_classes.excluded = true`인 분류의 장소를 뺀다 (`PlaceSql.NOT_EXCLUDED`)
 - 한글 이름순 정렬은 `ORDER BY name_ko COLLATE "C"`로 한다 (DB 기본 정렬은 가나다순이 아니다)
 
 ## 공통 기반 (`global` 패키지)

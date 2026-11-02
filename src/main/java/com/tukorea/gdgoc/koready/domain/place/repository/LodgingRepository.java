@@ -23,10 +23,9 @@ public class LodgingRepository {
 	private static final String MATCHES = """
 			p.content_type_id = :contentTypeId
 			    AND p.active
-			    AND NOT EXISTS (SELECT 1 FROM place_classes x
-			                    WHERE x.excluded AND x.code IN (p.class1_code, p.class2_code, p.class3_code))
+			    AND %s
 			    AND (p.name_ko ILIKE :pattern OR p.name_en ILIKE :pattern OR concat_ws(' ', p.addr1, p.addr2) ILIKE :pattern)
-			""";
+			""".formatted(PlaceSql.NOT_EXCLUDED);
 
 	/**
 	 * 이름이 정확히 맞는 것 → 이름에 들어간 것 → 주소에만 들어간 것 순이고, 그 안은 국문명 가나다순이다.
