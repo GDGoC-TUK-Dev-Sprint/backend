@@ -60,4 +60,14 @@ public class TripCostEstimate {
 	@CreationTimestamp
 	@Column(nullable = false)
 	private Instant createdAt;
+
+	// [expense] 추가: 확정할 때 항목별 1인 경비 범위를 저장한다
+	public static TripCostEstimate of(Trip trip, ExpenseItem item, int minKrw, int maxKrw) {
+		TripCostEstimate estimate = new TripCostEstimate();
+		estimate.trip = trip;
+		estimate.item = item;
+		estimate.minKrw = minKrw;
+		estimate.maxKrw = maxKrw;
+		return estimate;
+	}
 }
