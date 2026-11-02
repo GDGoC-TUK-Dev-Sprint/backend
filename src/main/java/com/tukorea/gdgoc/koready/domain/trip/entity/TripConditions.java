@@ -34,5 +34,10 @@ public record TripConditions(
 		public static Stay of(Area area) {
 			return new Stay(StayType.AREA, null, area, area.getNameKo(), null, area.getCenter().toPoint());
 		}
+
+		/** 지도에서 고른 핀. 이름은 핀 주소다 */
+		public static Stay of(Point pin, String address) {
+			return new Stay(StayType.PIN, null, null, address, address, pin);
+		}
 	}
 }

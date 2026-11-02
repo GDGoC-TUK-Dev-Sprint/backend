@@ -55,6 +55,9 @@ import org.locationtech.jts.geom.Point;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Trip {
 
+	/** {@code stay_name} 길이. 지도 핀은 핀 주소를 이름으로 쓰는데 이보다 길 수 있어 잘라 저장한다 */
+	static final int STAY_NAME_LENGTH = 200;
+
 	/** {@code stay_address} 길이. 장소 주소(addr1 + addr2, 각 200자)는 이보다 길 수 있어 잘라 저장한다 */
 	static final int STAY_ADDRESS_LENGTH = 300;
 
@@ -110,7 +113,7 @@ public class Trip {
 	@Column(length = 20)
 	private String stayAreaCode;
 
-	@Column(nullable = false, length = 200)
+	@Column(nullable = false, length = STAY_NAME_LENGTH)
 	private String stayName;
 
 	@Column(length = STAY_ADDRESS_LENGTH)
@@ -208,7 +211,7 @@ public class Trip {
 		stayType = stay.type();
 		stayPlace = stay.place();
 		stayAreaCode = codeOf(stay.area());
-		stayName = stay.name();
+		stayName = truncate(stay.name(), STAY_NAME_LENGTH);
 		stayAddress = truncate(stay.address(), STAY_ADDRESS_LENGTH);
 		stayLocation = stay.location();
 		replaceCategories(conditions.categories());

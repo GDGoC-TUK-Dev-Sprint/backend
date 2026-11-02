@@ -4,6 +4,7 @@ import com.tukorea.gdgoc.koready.domain.meta.entity.Area;
 import com.tukorea.gdgoc.koready.domain.meta.entity.Category;
 import com.tukorea.gdgoc.koready.domain.meta.entity.Nationality;
 import com.tukorea.gdgoc.koready.domain.trip.entity.StayType;
+import com.tukorea.gdgoc.koready.global.dto.LatLng;
 import com.tukorea.gdgoc.koready.global.dto.Money;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -23,7 +24,7 @@ public record TripRequest(
 		Set<@NotNull Category> categories,
 		@NotNull @Valid Stay stay) {
 
-	/** 숙소 지정 방식. PLACE면 placeId, AREA면 areaCode가 필요하다 */
-	public record Stay(@NotNull StayType type, Long placeId, Area areaCode) {
+	/** 숙소 지정 방식. PLACE면 placeId, AREA면 areaCode, PIN이면 location(지도 핀 좌표)이 필요하다 */
+	public record Stay(@NotNull StayType type, Long placeId, Area areaCode, @Valid LatLng location) {
 	}
 }
