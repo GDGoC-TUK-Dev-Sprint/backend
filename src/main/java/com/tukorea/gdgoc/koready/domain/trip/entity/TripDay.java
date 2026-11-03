@@ -1,5 +1,6 @@
 package com.tukorea.gdgoc.koready.domain.trip.entity;
 
+import com.tukorea.gdgoc.koready.domain.place.entity.Place;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -70,6 +71,15 @@ public class TripDay {
 	@OrderBy("seq")
 	private List<Leg> legs = new ArrayList<>();
 
+	/** 여행의 하루를 만든다 (동선 만들기). 일정 항목이 없는 날도 일자는 있다 */
+	public static TripDay create(Trip trip, int dayNumber, LocalDate tripDate) {
+		TripDay day = new TripDay();
+		day.trip = trip;
+		day.dayNumber = (short) dayNumber;
+		day.tripDate = tripDate;
+		return day;
+	}
+
 	/** 일정 항목 (방문 순서). 목록을 직접 바꾸지 않게 읽기 전용으로 준다 */
 	public List<TripItem> getItems() {
 		return Collections.unmodifiableList(items);
@@ -78,6 +88,16 @@ public class TripDay {
 	/** 이동 구간 (숙소 출발 구간부터 숙소 도착 구간까지). 목록을 직접 바꾸지 않게 읽기 전용으로 준다 */
 	public List<Leg> getLegs() {
 		return Collections.unmodifiableList(legs);
+	}
+
+	/**
+	 * 일정 항목을 방문 순서 끝에 더한다 (동선 만들기). seq는 1부터 차례로, 체류시간은 장소의 체류시간이다.
+	 * 도착·출발 시각이 NOT NULL이라 저장하기 전에 시각을 채운다 ({@link TripItem#schedule}).
+	 */
+	public TripItem addItem(Place place, TripItemOrigin origin, MealType mealType) {
+		TripItem item = TripItem.create(this, items.size() + 1, place, origin, mealType);
+		items.add(item);
+		return item;
 	}
 
 	/** 일정 항목을 뺀다 (장소 삭제). 행은 orphanRemoval로 지워진다 */

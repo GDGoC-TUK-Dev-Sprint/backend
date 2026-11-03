@@ -71,6 +71,18 @@ public class TripItem {
 	@Column(nullable = false)
 	private Short stayMinutes;
 
+	/** 일자에 더할 항목. 일자의 {@link TripDay#addItem}으로만 만든다. 도착·출발 시각은 저장 전에 {@link #schedule}로 채운다 */
+	static TripItem create(TripDay tripDay, int seq, Place place, TripItemOrigin origin, MealType mealType) {
+		TripItem item = new TripItem();
+		item.tripDay = tripDay;
+		item.seq = (short) seq;
+		item.place = place;
+		item.origin = origin;
+		item.mealType = mealType;
+		item.stayMinutes = place.getStayMinutes();
+		return item;
+	}
+
 	/** 방문 순서만 바꾼다 (행을 다시 넣지 않아 ID가 그대로다) */
 	public void changeSeq(int seq) {
 		this.seq = (short) seq;

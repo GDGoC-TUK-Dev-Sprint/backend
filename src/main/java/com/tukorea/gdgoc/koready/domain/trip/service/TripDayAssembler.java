@@ -75,7 +75,8 @@ class TripDayAssembler {
 				warnings);
 	}
 
-	private static PlaceSummary placeSummary(Place place, Language language) {
+	/** 장소 요약. 동선 만들기의 넣지 못한 장소도 이것으로 만든다 */
+	static PlaceSummary placeSummary(Place place, Language language) {
 		return new PlaceSummary(
 				place.getId(),
 				language.pick(place.getNameKo(), place.getNameEn()),
