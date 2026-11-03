@@ -140,10 +140,10 @@ public class TripService {
 	}
 
 	/**
-	 * 같은 사용자의 여행 요청(만들기·조건 다시 저장)이 겹치지 않게 사용자 행을 잠근다. 잠그지 않으면 겹친 요청끼리
+	 * 같은 사용자의 여행 요청(만들기·조건 다시 저장·동선 만들기·확정)이 겹치지 않게 사용자 행을 잠근다. 잠그지 않으면 겹친 요청끼리
 	 * 한쪽 변경이 덮어써지거나 확정 전 여행이 둘이 될 수 있다. 사용자가 없으면(탈퇴) {@code 401}이다.
 	 */
-	private User lockUser(Long userId) {
+	User lockUser(Long userId) {
 		User user = entityManager.find(User.class, userId, LockModeType.PESSIMISTIC_WRITE);
 		if (user == null) {
 			throw new ApiException(ErrorCode.UNAUTHORIZED);

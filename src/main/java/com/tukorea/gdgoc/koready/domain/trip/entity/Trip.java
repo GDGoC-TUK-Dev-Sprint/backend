@@ -166,6 +166,13 @@ public class Trip {
 		return routeOutdated;
 	}
 
+	/** 동선을 만들 때 생기는 여행 제목. 확정한 여행은 바꿀 수 없다 ({@code 409 TRIP_CONFIRMED}) */
+	public void changeTitle(String titleKo, String titleEn) {
+		requireEditable();
+		this.titleKo = titleKo;
+		this.titleEn = titleEn;
+	}
+
 	/** 여행 일수 (2박 3일이면 3) */
 	public int getDays() {
 		return countDays(startDate, endDate);

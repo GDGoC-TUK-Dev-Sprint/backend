@@ -11,6 +11,7 @@ import org.springframework.validation.annotation.Validated;
  * 동선 계산 설정값 ({@code koready.route.*}). 이동 구간을 좌표로 추정할 때와 시각을 이어 붙일 때 쓴다.
  *
  * @param dayStart 숙소 출발 시각이 없을 때 쓰는 하루 시작 시각
+ * @param dayEnd 동선 만들기에서 숙소에 돌아와야 하는 시각. 넘기면 하루 시간이 모자란 것이다
  * @param walkMaxDistanceM 직선거리가 이 값(m) 이하면 도보, 넘으면 대중교통으로 추정한다
  * @param detourFactor 직선거리를 실제 이동 거리로 바꾸는 보정 배수
  * @param walkMetersPerMinute 도보 속도
@@ -21,6 +22,7 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties("koready.route")
 public record RouteProperties(
 		@NotNull LocalTime dayStart,
+		@NotNull LocalTime dayEnd,
 		@Min(1) int walkMaxDistanceM,
 		@DecimalMin("1.0") double detourFactor,
 		@DecimalMin("1.0") double walkMetersPerMinute,

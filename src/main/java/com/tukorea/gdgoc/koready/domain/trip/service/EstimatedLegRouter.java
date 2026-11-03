@@ -34,8 +34,8 @@ class EstimatedLegRouter implements LegRouter {
 		return Math.max(1, (int) Math.ceil(minutes));
 	}
 
-	/** 두 점의 직선(대권) 거리(m). 하버사인 공식 */
-	private static double distanceMeters(LatLng a, LatLng b) {
+	/** 두 점의 직선(대권) 거리(m). 하버사인 공식. 동선 만들기의 일자 배정도 이 거리로 묶는다 */
+	static double distanceMeters(LatLng a, LatLng b) {
 		double dLat = Math.toRadians(b.lat() - a.lat());
 		double dLng = Math.toRadians(b.lng() - a.lng());
 		double h = Math.sin(dLat / 2) * Math.sin(dLat / 2)
