@@ -3,9 +3,8 @@ package com.tukorea.gdgoc.koready.domain.trip.service;
 import com.tukorea.gdgoc.koready.global.dto.LatLng;
 
 /**
- * 두 지점 사이 이동시간·운임을 구한다.
- * TODO ODsay 연동 클라이언트({@code infra/odsay})가 생기면 그것을 부르는 구현을 만든다. ODsay를 부르지 못한 구간은
- * {@link EstimatedLegRouter}의 추정값으로 대신한다 ({@code estimated = true}).
+ * 두 지점 사이 이동시간·운임을 구한다. 기본 구현은 {@link OdsayLegRouter}(ODsay, 받지 못하면 좌표 추정값)이고,
+ * 방문 순서를 정할 때는 경로 API를 부르지 않도록 {@link EstimatedLegRouter}를 바로 쓴다.
  */
 public interface LegRouter {
 

@@ -1,8 +1,16 @@
 package com.tukorea.gdgoc.koready.domain.trip;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.InstanceOfAssertFactories.LIST;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.jayway.jsonpath.JsonPath;
+import com.tukorea.gdgoc.koready.infra.odsay.OdsayClient;
+import com.tukorea.gdgoc.koready.infra.odsay.OdsayRoute;
 import com.tukorea.gdgoc.koready.support.IntegrationTest;
 import jakarta.persistence.EntityManager;
 import java.nio.charset.StandardCharsets;
@@ -21,6 +29,7 @@ import org.springframework.test.web.servlet.assertj.MvcTestResult;
 /**
  * 일자별 일정 조회·순서 변경·장소 삭제. 장소는 테스트가 직접 넣고(숙소 근처 가까운 곳 둘, 먼 곳 하나), 모두 롤백된다.
  * 1일차(2026-11-10)에 A(가까움, 60분) → B(멂, 30분) → C(가까움, 30분, 09:00~10:00에만 엶) 순서로 담겨 있다.
+ * ODsay는 가짜이고 기본은 키가 없는 것과 같아, 구간은 좌표 추정값이다.
  */
 @IntegrationTest
 class TripDayTest {
@@ -38,6 +47,9 @@ class TripDayTest {
 
 	@Autowired
 	EntityManager entityManager;
+
+	@Autowired
+	OdsayClient odsay;
 
 	long userId;
 	long tripId;
@@ -220,6 +232,22 @@ class TripDayTest {
 			assertThat(body(restored)).isEqualTo(original);
 		}
 
+		/** 양 끝 장소가 그대로인 구간은 ODsay를 다시 부르지 않고 저장해 둔 값을 쓴다 */
+		@Test
+		void unchangedLegKeepsOdsayValueWithoutCalling() {
+			useOdsay();
+			when(odsay.searchPath(any(), any())).thenReturn(new OdsayRoute(40, 5000, 1650));
+			clearInvocations(odsay);
+
+			// C → A → B: 숙소→C·C→A는 도보, A→B는 그대로, B→숙소만 새 대중교통 구간이다
+			MvcTestResult result = reorder(tripId, 1, itemC, itemA, itemB);
+
+			verify(odsay, times(1)).searchPath(any(), any());
+			assertThat(read(result, "$.legs[*].estimated")).isEqualTo(List.of(true, true, false, false));
+			assertThat(read(result, "$.legs[*].durationMinutes")).asInstanceOf(LIST).endsWith(25, 40);
+			assertThat(read(result, "$.summary.farePerPerson.amount")).isEqualTo(1550 + 1650);
+		}
+
 		@Test
 		void mismatchedItemsAreRejected() {
 			long otherDay = insertDay(tripId, 2, "2026-11-11");
@@ -271,6 +299,20 @@ class TripDayTest {
 			assertThat(read(result, "$.summary.totalStayMinutes")).isEqualTo(90);
 			assertThat(jdbc.queryForObject("SELECT count(*) FROM trip_items WHERE id = ?", Integer.class, itemB))
 					.isZero();
+		}
+
+		@Test
+		void remainingLegsKeepOdsayValuesWithoutCalling() {
+			useOdsay();
+			when(odsay.searchPath(any(), any())).thenReturn(new OdsayRoute(40, 5000, 1650));
+			clearInvocations(odsay);
+
+			// C를 빼면 숙소→A(도보)·A→B는 그대로, B→숙소만 새 대중교통 구간이다
+			MvcTestResult result = delete(tripId, itemC);
+
+			verify(odsay, times(1)).searchPath(any(), any());
+			assertThat(read(result, "$.legs[*].estimated")).isEqualTo(List.of(true, false, false));
+			assertThat(read(result, "$.legs[*].durationMinutes")).asInstanceOf(LIST).endsWith(25, 40);
 		}
 
 		@Test
@@ -341,6 +383,21 @@ class TripDayTest {
 	private MvcTestResult delete(long tripId, long itemId) {
 		return mvc.delete().uri("/api/trips/{tripId}/items/{itemId}", tripId, itemId)
 				.header("X-Dev-User-Id", userId).exchange();
+	}
+
+	/**
+	 * ODsay를 켜고 처음 순서를 다시 보내, 대중교통 구간(A→B·B→C)을 ODsay 값(25분·1,550원)으로 바꾼다.
+	 * 처음 구간은 ODsay를 끈 채 만든 좌표 추정값이라 모두 다시 부른다.
+	 */
+	private void useOdsay() {
+		when(odsay.enabled()).thenReturn(true);
+		when(odsay.searchPath(any(), any())).thenReturn(new OdsayRoute(25, 4200, 1550));
+
+		MvcTestResult result = reorder(tripId, 1, itemA, itemB, itemC);
+
+		assertThat(read(result, "$.legs[*].estimated")).isEqualTo(List.of(true, false, false, true));
+		verify(odsay, times(2)).searchPath(any(), any());
+		flush();
 	}
 
 	// --- 데이터

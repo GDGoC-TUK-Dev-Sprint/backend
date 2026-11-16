@@ -5,9 +5,12 @@ import com.tukorea.gdgoc.koready.domain.trip.config.RouteProperties;
 import com.tukorea.gdgoc.koready.domain.trip.entity.Leg;
 import com.tukorea.gdgoc.koready.domain.trip.entity.TripDay;
 import com.tukorea.gdgoc.koready.domain.trip.entity.TripItem;
+import com.tukorea.gdgoc.koready.domain.trip.repository.RoutedLeg;
+import com.tukorea.gdgoc.koready.domain.trip.repository.TripRepository;
 import com.tukorea.gdgoc.koready.global.dto.LatLng;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +20,8 @@ import org.springframework.stereotype.Component;
  * 일자 하나의 이동 구간과 도착·출발 시각을 계산한다 (동선 만들기·순서 변경·장소 삭제).
  * 숙소 출발 → 구간 이동시간 → 도착 → 체류 → 출발 → … → 숙소 도착 순서로 이어 붙인다.
  * 여는 시각 전에 도착하면 여는 시각까지 기다린다 (도착 시각 = 여는 시각, {@link OpeningHours#earliestStart}).
+ * 구간은 {@link LegRouter}로 받고, 지우기 전 구간 중 양 끝 장소가 같은 구간은 경로 API 값을 다시 쓴다
+ * (동선 다시 만들기·순서 변경·장소 삭제. 경로 API는 출발 시각을 받지 않아 같은 장소 쌍이면 값이 같다).
  */
 @Component
 @RequiredArgsConstructor
@@ -27,15 +32,47 @@ class DayRecalculator {
 	private final PlaceOpeningHourRepository openingHours;
 
 	/**
-	 * 항목이 seq 순서로 정렬돼 있고 기존 구간은 지워져 있어야 한다 (부르는 쪽이 비운 뒤 flush한다).
-	 * 항목이 없으면 구간을 만들지 않고 숙소 출발·도착 시각을 비운다.
+	 * 동선 만들기의 새 일자. 장소마다 운영시간을 이미 읽어 두었다. 지운 동선에서 모아 둔 구간({@link #routedLegs(List)})
+	 * 중 양 끝 장소가 같은 구간은 경로 API를 다시 부르지 않고 쓴다.
 	 */
-	void rebuild(TripDay day, LatLng stay) {
-		rebuild(day, stay, OpeningHours.byPlace(day.getItems().stream().map(TripItem::getPlace).toList(), openingHours));
+	void build(TripDay day, LatLng stay, Map<Long, OpeningHours> hoursByPlace, Map<Segment, LegRoute> routed) {
+		calculate(day, stay, hoursByPlace, routed);
 	}
 
-	/** 장소마다 운영시간을 이미 읽어 둔 경우 (동선 만들기) */
-	void rebuild(TripDay day, LatLng stay, Map<Long, OpeningHours> hoursByPlace) {
+	/**
+	 * 순서 변경·장소 삭제. 항목이 seq 순서로 정렬돼 있고 기존 구간은 지워져 있어야 한다 (부르는 쪽이 비운 뒤 flush한다).
+	 * 지우기 전에 {@link #routedLegs(TripDay)}로 모아 둔 구간 중 양 끝 장소가 같은 구간은 경로 API를 다시 부르지 않고 쓴다.
+	 */
+	void rebuild(TripDay day, LatLng stay, Map<Segment, LegRoute> routed) {
+		calculate(day, stay, OpeningHours.byPlace(day.getItems().stream().map(TripItem::getPlace).toList(), openingHours),
+				routed);
+	}
+
+	/**
+	 * 일자의 구간 중 경로 API로 받은 값을 양 끝 장소로 모은다 (구간을 지우기 전에 부른다). 좌표 추정값은 모으지 않는다
+	 * (다시 계산할 때 경로 API로 받을 수 있다).
+	 */
+	static Map<Segment, LegRoute> routedLegs(TripDay day) {
+		return routedLegs(day.getLegs().stream()
+				.filter(leg -> !leg.isEstimated())
+				.map(leg -> new RoutedLeg(placeId(leg.getFromItem()), placeId(leg.getToItem()), leg.getMode(),
+						leg.getDistanceM(), leg.getDurationMinutes(), leg.getFareKrw()))
+				.toList());
+	}
+
+	/** 경로 API로 받은 구간들을 양 끝 장소로 모은다. 동선을 다시 만들 때는 {@link TripRepository#findRoutedLegs}로 읽는다 */
+	static Map<Segment, LegRoute> routedLegs(List<RoutedLeg> legs) {
+		Map<Segment, LegRoute> routed = new HashMap<>();
+		for (RoutedLeg leg : legs) {
+			routed.putIfAbsent(new Segment(leg.fromPlaceId(), leg.toPlaceId()),
+					new LegRoute(leg.mode(), leg.distanceM(), leg.durationMinutes(), leg.fareKrw(), false));
+		}
+		return routed;
+	}
+
+	/** 항목이 없으면 구간을 만들지 않고 숙소 출발·도착 시각을 비운다 */
+	private void calculate(TripDay day, LatLng stay, Map<Long, OpeningHours> hoursByPlace,
+			Map<Segment, LegRoute> routed) {
 		List<TripItem> items = day.getItems();
 		if (items.isEmpty()) {
 			day.updateTimes(null, null);
@@ -46,7 +83,7 @@ class DayRecalculator {
 		TripItem previous = null;
 		int legSeq = 0;
 		for (TripItem item : items) {
-			LegRoute route = route(previous, item, stay);
+			LegRoute route = route(previous, item, stay, routed);
 			day.addLeg(newLeg(day, legSeq++, previous, item, route));
 			int arrive = waitForOpening(day.getTripDate(), cursor + route.durationMinutes(), item,
 					hoursByPlace.getOrDefault(item.getPlace().getId(), OpeningHours.UNRESTRICTED));
@@ -55,7 +92,7 @@ class DayRecalculator {
 			cursor = depart;
 			previous = item;
 		}
-		LegRoute back = route(previous, null, stay);
+		LegRoute back = route(previous, null, stay, routed);
 		day.addLeg(newLeg(day, legSeq, previous, null, back));
 		day.updateTimes(start, clock(cursor + back.durationMinutes()));
 	}
@@ -74,8 +111,9 @@ class DayRecalculator {
 		return LocalTime.MIDNIGHT.plusMinutes(minutes);
 	}
 
-	private LegRoute route(TripItem from, TripItem to, LatLng stay) {
-		return legRouter.route(locationOf(from, stay), locationOf(to, stay));
+	private LegRoute route(TripItem from, TripItem to, LatLng stay, Map<Segment, LegRoute> routed) {
+		LegRoute reused = routed.get(new Segment(placeId(from), placeId(to)));
+		return reused != null ? reused : legRouter.route(locationOf(from, stay), locationOf(to, stay));
 	}
 
 	/** 항목이 null이면 숙소다 */
@@ -83,8 +121,17 @@ class DayRecalculator {
 		return item == null ? stay : LatLng.from(item.getPlace().getLocation());
 	}
 
+	/** 항목이 null이면 숙소(null)다 */
+	private static Long placeId(TripItem item) {
+		return item == null ? null : item.getPlace().getId();
+	}
+
 	private static Leg newLeg(TripDay day, int seq, TripItem from, TripItem to, LegRoute route) {
 		return Leg.create(day, seq, from, to, route.mode(), route.distanceM(), route.durationMinutes(),
 				route.fareKrw(), route.estimated());
+	}
+
+	/** 구간의 양 끝 장소 ID. null이면 숙소다 (숙소를 바꾸면 동선을 지우므로 한 여행의 숙소는 하나다) */
+	record Segment(Long fromPlaceId, Long toPlaceId) {
 	}
 }
