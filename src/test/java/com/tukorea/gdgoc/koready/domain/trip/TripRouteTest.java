@@ -1,9 +1,19 @@
 package com.tukorea.gdgoc.koready.domain.trip;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.jayway.jsonpath.JsonPath;
 import com.tukorea.gdgoc.koready.domain.place.repository.PlaceSql;
+import com.tukorea.gdgoc.koready.global.exception.ApiException;
+import com.tukorea.gdgoc.koready.global.exception.ErrorCode;
+import com.tukorea.gdgoc.koready.infra.odsay.OdsayClient;
+import com.tukorea.gdgoc.koready.infra.odsay.OdsayRoute;
 import com.tukorea.gdgoc.koready.support.IntegrationTest;
 import jakarta.persistence.EntityManager;
 import java.nio.charset.StandardCharsets;
@@ -28,6 +38,7 @@ import org.springframework.test.web.servlet.assertj.MvcTestResult;
  * 동선 만들기. 여행은 2026-11-10(화)~11-12(목) 명동 숙소이고, 장소는 테스트가 숙소 근처에 넣는다 (모두 롤백).
  * A·D는 걸어서 가는 곳, B는 3.3km(대중교통), C는 10:00~18:00에만 연다.
  * 담은 장소가 9곳(3일 × 하루 권장 최소 3곳)보다 적으면 덤프 장소가 추천순으로 채워진다 ({@code AUTO_FILL}).
+ * ODsay는 가짜이고 기본은 키가 없는 것과 같아, 구간은 좌표 추정값이다 ({@link Odsay}만 켠다).
  */
 @IntegrationTest
 class TripRouteTest {
@@ -45,6 +56,9 @@ class TripRouteTest {
 
 	@Autowired
 	EntityManager entityManager;
+
+	@Autowired
+	OdsayClient odsay;
 
 	long userId;
 	long tripId;
@@ -377,6 +391,87 @@ class TripRouteTest {
 		}
 	}
 
+	/** ODsay는 가짜다. 기본은 키가 없는 것과 같아 구간이 좌표 추정값이고, 이 테스트들은 켜서 부른다 */
+	@Nested
+	class Odsay {
+
+		@Test
+		void transitLegsUseOdsayAndWalkingLegsDoNotCallIt() {
+			when(odsay.enabled()).thenReturn(true);
+			when(odsay.searchPath(any(), any())).thenReturn(new OdsayRoute(25, 4200, 1550));
+
+			assertThat(route(placeA, placeB, placeC, placeD)).hasStatus(HttpStatus.CREATED);
+			flush();
+
+			List<Map<String, Object>> legs = allLegs();
+			List<Map<String, Object>> transit = legs.stream().filter(leg -> "TRANSIT".equals(leg.get("mode"))).toList();
+			assertThat(transit).isNotEmpty();
+			for (Map<String, Object> leg : transit) {
+				assertThat(leg).containsEntry("estimated", false).containsEntry("durationMinutes", 25)
+						.containsEntry("distanceM", 4200)
+						.containsEntry("fare", Map.of("amount", 1550, "currency", "KRW"));
+			}
+			for (Map<String, Object> leg : legs) {
+				if ("WALK".equals(leg.get("mode"))) {
+					assertThat(leg).containsEntry("estimated", true);
+				}
+			}
+			verify(odsay, times(transit.size())).searchPath(any(), any());
+		}
+
+		/** ODsay가 실패해도 동선은 만들고, 그 구간은 좌표 추정값(운임 없음)이다 */
+		@Test
+		void odsayFailureStillCreatesRouteWithEstimates() {
+			when(odsay.enabled()).thenReturn(true);
+			when(odsay.searchPath(any(), any())).thenThrow(new ApiException(ErrorCode.EXTERNAL_API_FAILED, "실패"));
+
+			assertThat(route(placeA, placeB, placeC, placeD)).hasStatus(HttpStatus.CREATED);
+			flush();
+
+			List<Map<String, Object>> transit = allLegs().stream()
+					.filter(leg -> "TRANSIT".equals(leg.get("mode"))).toList();
+			assertThat(transit).isNotEmpty().allSatisfy(leg -> {
+				assertThat(leg).containsEntry("estimated", true);
+				assertThat(leg.get("fare")).isNull();
+			});
+		}
+
+		/** 다시 만들면 지운 동선의 ODsay 구간 중 같은 장소 쌍은 다시 부르지 않고 그 값을 쓴다 */
+		@Test
+		void callingAgainReusesOdsayLegsOfSamePlaces() {
+			when(odsay.enabled()).thenReturn(true);
+			when(odsay.searchPath(any(), any())).thenReturn(new OdsayRoute(25, 4200, 1550));
+			route(placeA, placeB, placeC, placeD);
+			flush();
+			when(odsay.searchPath(any(), any())).thenReturn(new OdsayRoute(40, 5000, 1650));
+			clearInvocations(odsay);
+
+			assertThat(route(placeA, placeB, placeC, placeD)).hasStatus(HttpStatus.CREATED);
+			flush();
+
+			verify(odsay, never()).searchPath(any(), any());
+			assertThat(allLegs()).filteredOn(leg -> "TRANSIT".equals(leg.get("mode"))).isNotEmpty()
+					.allSatisfy(leg -> assertThat(leg).containsEntry("estimated", false).containsEntry("durationMinutes", 25));
+		}
+
+		/** 순서는 좌표 추정값으로 정한다: ODsay 값이 달라도 일자 배정·방문 순서는 그대로이고, 시각만 ODsay 값으로 이어 붙인다 */
+		@Test
+		void orderIsPlannedWithEstimates() {
+			route(placeA, placeB, placeC, placeD);
+			flush();
+			List<List<Long>> estimatedOrder = dayOrders();
+
+			when(odsay.enabled()).thenReturn(true);
+			when(odsay.searchPath(any(), any())).thenReturn(new OdsayRoute(90, 4200, 1550));
+			route(placeA, placeB, placeC, placeD);
+			flush();
+
+			assertThat(dayOrders()).isEqualTo(estimatedOrder);
+			assertThat(allLegs()).filteredOn(leg -> "TRANSIT".equals(leg.get("mode")))
+					.allSatisfy(leg -> assertThat(leg).containsEntry("durationMinutes", 90));
+		}
+	}
+
 	// --- 요청
 
 	private MvcTestResult route(long... placeIds) {
@@ -489,6 +584,24 @@ class TripRouteTest {
 
 	private static List<Long> itemPlaceIds(MvcTestResult result) {
 		return new ArrayList<>(ids(result, "$.items[*].place.placeId"));
+	}
+
+	/** 1~3일차 이동 구간 모두 (일자별 일정 응답) */
+	private List<Map<String, Object>> allLegs() {
+		List<Map<String, Object>> legs = new ArrayList<>();
+		for (int day = 1; day <= 3; day++) {
+			legs.addAll(list(day(day), "$.legs"));
+		}
+		return legs;
+	}
+
+	/** 1~3일차 방문 순서 (장소 ID) */
+	private List<List<Long>> dayOrders() {
+		List<List<Long>> orders = new ArrayList<>();
+		for (int day = 1; day <= 3; day++) {
+			orders.add(itemPlaceIds(day(day)));
+		}
+		return orders;
 	}
 
 	private static void assertError(MvcTestResult result, HttpStatus status, String code) {

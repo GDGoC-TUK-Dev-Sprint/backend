@@ -24,8 +24,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 일자별 일정 조회·순서 변경·장소 삭제. 순서를 바꾸거나 항목을 빼면 그 일자의 이동 구간과 도착·출발 시각을 다시 계산한다.
- * 편집은 같은 일자를 동시에 고치지 않게 일자 행을 잠근다.
+ * 일자별 일정 조회·순서 변경·장소 삭제. 순서를 바꾸거나 항목을 빼면 그 일자의 이동 구간과 도착·출발 시각을 다시 계산한다
+ * (양 끝 장소가 그대로인 구간은 ODsay를 다시 부르지 않는다). 편집은 같은 일자를 동시에 고치지 않게 일자 행을 잠근다.
  */
 @Service
 @RequiredArgsConstructor
@@ -57,10 +57,11 @@ public class TripDayService {
 				.collect(Collectors.toMap(TripItem::getId, Function.identity()));
 		validateOrder(itemsById.keySet(), itemIds);
 
+		Map<DayRecalculator.Segment, LegRoute> routed = DayRecalculator.routedLegs(day);
 		day.clearLegs();
 		items.flush();
 		renumber(day, itemIds.stream().map(itemsById::get).toList());
-		recalculator.rebuild(day, stayLocation(trip, language));
+		recalculator.rebuild(day, stayLocation(trip, language), routed);
 		return assembler.assemble(day, language);
 	}
 
@@ -74,11 +75,12 @@ public class TripDayService {
 		TripDay day = days.findByIdForUpdate(item.getTripDay().getId())
 				.orElseThrow(() -> new ApiException(ErrorCode.ITEM_NOT_FOUND));
 
+		Map<DayRecalculator.Segment, LegRoute> routed = DayRecalculator.routedLegs(day);
 		day.clearLegs();
 		day.removeItem(item);
 		items.flush();
 		renumber(day, new ArrayList<>(day.getItems()));
-		recalculator.rebuild(day, stayLocation(trip, language));
+		recalculator.rebuild(day, stayLocation(trip, language), routed);
 		return assembler.assemble(day, language);
 	}
 

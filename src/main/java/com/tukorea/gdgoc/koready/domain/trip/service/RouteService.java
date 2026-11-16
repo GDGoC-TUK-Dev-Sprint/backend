@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 동선 만들기. 담은 장소를 검사하고 일자 배정·방문 순서를 계산해({@link RoutePlanner}) 일자·일정 항목·이동 구간을 저장한다.
  * 담은 장소가 권장 최소(일수 × 하루 권장 최소)보다 적으면 추천순으로 채운다 ({@code AUTO_FILL}).
- * 동선이 이미 있으면 지우고 새로 만든다 (일자별 일정에서 바꾼 순서도 초기화된다).
+ * 동선이 이미 있으면 지우고 새로 만든다 (일자별 일정에서 바꾼 순서도 초기화된다. 같은 장소 쌍의 ODsay 구간은 다시 부르지 않는다).
  */
 @Service
 @RequiredArgsConstructor
@@ -80,6 +80,8 @@ public class RouteService {
 				.forEach(place -> stops.add(stop(place, hoursByPlace, true)));
 		RoutePlanner.Plan plan = planner.plan(stay, dates, stops);
 
+		// 다시 만들면 지울 동선의 ODsay 구간 중 같은 장소 쌍은 다시 부르지 않는다 (숙소를 바꾸면 동선이 지워져 숙소는 같다)
+		Map<DayRecalculator.Segment, LegRoute> routed = DayRecalculator.routedLegs(trips.findRoutedLegs(trip.getId()));
 		trips.deleteDays(trip.getId());
 		List<RouteResponse.Day> dayResponses = new ArrayList<>();
 		for (int i = 0; i < dates.size(); i++) {
@@ -89,7 +91,7 @@ public class RouteService {
 						visit.stop().filled() ? TripItemOrigin.AUTO_FILL : TripItemOrigin.SELECTED, null);
 			}
 			// 일정 항목 시각이 NOT NULL이라 시각을 채운 뒤 저장한다 (일자와 함께 항목·구간이 들어간다)
-			recalculator.rebuild(day, stay, hoursByPlace);
+			recalculator.build(day, stay, hoursByPlace, routed);
 			days.save(day);
 			dayResponses.add(new RouteResponse.Day(day.getDayNumber(), day.getTripDate(), day.getItems().size()));
 		}

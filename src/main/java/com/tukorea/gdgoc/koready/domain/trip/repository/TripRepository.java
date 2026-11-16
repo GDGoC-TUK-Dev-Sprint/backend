@@ -23,6 +23,20 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
 	boolean hasDays(Long tripId);
 
 	/**
+	 * 여행의 이동 구간 중 경로 API로 받은 것. 동선을 다시 만들 때 같은 장소 쌍은 경로 API를 다시 부르지 않는다.
+	 * 엔티티를 읽지 않으므로 {@link #deleteDays} 전에 불러도 된다
+	 */
+	@Query("""
+			select new com.tukorea.gdgoc.koready.domain.trip.repository.RoutedLeg(
+			    fromPlace.id, toPlace.id, l.mode, l.distanceM, l.durationMinutes, l.fareKrw)
+			from Leg l
+			left join l.fromItem fromItem left join fromItem.place fromPlace
+			left join l.toItem toItem left join toItem.place toPlace
+			where l.tripDay.trip.id = :tripId and l.estimated = false
+			""")
+	List<RoutedLeg> findRoutedLegs(Long tripId);
+
+	/**
 	 * 동선(일자)을 지운다. 딸린 일정 항목·이동 구간은 DB가 함께 지운다 (ON DELETE CASCADE).
 	 * SQL로 바로 지우므로, 이미 읽어 둔 일자·일정 항목 엔티티는 영속성 컨텍스트에 남는다 (읽기 전에 부른다)
 	 */
