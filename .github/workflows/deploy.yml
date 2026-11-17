@@ -1,0 +1,96 @@
+# develop에 push되면 이미지를 빌드해 ECR에 올린다 (커밋 SHA 태그).
+# 수동 실행(workflow_dispatch)에 image_tag를 넣으면 빌드하지 않고 ECR에 있는 그 태그를 쓴다 (되돌리기).
+# AWS 권한은 OIDC 역할로 받는다. 역할은 이 저장소의 develop 브랜치에서 도는 실행만 쓸 수 있어서, 수동 실행도 develop에서 한다.
+name: Deploy
+
+on:
+  push:
+    branches: [develop]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: '배포할 이미지 태그 (커밋 SHA). 비우면 지금 커밋을 빌드한다'
+        required: false
+        default: ''
+
+permissions:
+  id-token: write
+  contents: read
+
+# 배포는 한 번에 하나씩. 진행 중인 배포는 취소하지 않고 끝난 뒤 다음 것을 돌린다
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+
+jobs:
+  image:
+    name: Build and push image
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+    steps:
+      - name: Decide image tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.image_tag }}
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            echo "image_tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "image_tag=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.tag.outputs.build == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        if: steps.tag.outputs.build == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        if: steps.tag.outputs.build == 'true'
+        uses: gradle/actions/setup-gradle@v4
+
+      # 테스트는 PostGIS와 적재된 장소 데이터가 있어야 돌아서 여기서는 돌리지 않는다 (PR 전에 로컬에서 돌린다)
+      - name: Build jar
+        if: steps.tag.outputs.build == 'true'
+        run: ./gradlew bootJar --no-daemon
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        if: steps.tag.outputs.build == 'true'
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.image_tag }}
+        run: |
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Check image exists
+        if: steps.tag.outputs.build == 'false'
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
+        run: |
+          aws ecr batch-get-image --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$IMAGE_TAG" \
+            --query 'images[0].imageId.imageTag' --output text | grep -qx "$IMAGE_TAG" \
+            || { echo "ECR에 태그 $IMAGE_TAG 이미지가 없습니다"; exit 1; }
