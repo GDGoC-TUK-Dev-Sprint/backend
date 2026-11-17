@@ -15,6 +15,7 @@ import com.tukorea.gdgoc.koready.global.exception.ErrorCode;
 import com.tukorea.gdgoc.koready.infra.odsay.OdsayClient;
 import com.tukorea.gdgoc.koready.infra.odsay.OdsayRoute;
 import com.tukorea.gdgoc.koready.support.IntegrationTest;
+import com.tukorea.gdgoc.koready.support.OdsayStubs;
 import jakarta.persistence.EntityManager;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
@@ -71,6 +72,7 @@ class TripRouteTest {
 
 	@BeforeEach
 	void seed() {
+		OdsayStubs.searchPathsCallSearchPath(odsay);
 		userId = insertUser();
 		tripId = createTrip(userId, TRIP);
 		Map<String, Object> stay = jdbc.queryForMap(
