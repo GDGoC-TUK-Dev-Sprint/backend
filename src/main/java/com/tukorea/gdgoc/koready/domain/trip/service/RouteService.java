@@ -83,13 +83,19 @@ public class RouteService {
 		// 다시 만들면 지울 동선의 ODsay 구간 중 같은 장소 쌍은 다시 부르지 않는다 (숙소를 바꾸면 동선이 지워져 숙소는 같다)
 		Map<DayRecalculator.Segment, LegRoute> routed = DayRecalculator.routedLegs(trips.findRoutedLegs(trip.getId()));
 		trips.deleteDays(trip.getId());
-		List<RouteResponse.Day> dayResponses = new ArrayList<>();
+		List<TripDay> newDays = new ArrayList<>();
 		for (int i = 0; i < dates.size(); i++) {
 			TripDay day = TripDay.create(trip, i + 1, dates.get(i));
 			for (RoutePlanner.Visit visit : plan.days().get(i)) {
 				day.addItem(placesById.get(visit.stop().placeId()),
 						visit.stop().filled() ? TripItemOrigin.AUTO_FILL : TripItemOrigin.SELECTED, null);
 			}
+			newDays.add(day);
+		}
+		// 모든 일자의 구간을 한 번에 받는다 (ODsay를 동시에 부르고 전체 시간 제한이 요청에 한 번 걸린다)
+		recalculator.routeMissing(newDays, stay, routed);
+		List<RouteResponse.Day> dayResponses = new ArrayList<>();
+		for (TripDay day : newDays) {
 			// 일정 항목 시각이 NOT NULL이라 시각을 채운 뒤 저장한다 (일자와 함께 항목·구간이 들어간다)
 			recalculator.build(day, stay, hoursByPlace, routed);
 			days.save(day);

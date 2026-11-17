@@ -15,7 +15,10 @@ import com.tukorea.gdgoc.koready.global.exception.ApiException;
 import com.tukorea.gdgoc.koready.global.exception.ErrorCode;
 import com.tukorea.gdgoc.koready.infra.odsay.OdsayClient;
 import com.tukorea.gdgoc.koready.infra.odsay.OdsayRoute;
+import com.tukorea.gdgoc.koready.support.OdsayStubs;
 import java.time.LocalTime;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -32,6 +35,11 @@ class OdsayLegRouterTest {
 	private final EstimatedLegRouter estimated = new EstimatedLegRouter(properties);
 	private final OdsayClient odsay = mock(OdsayClient.class);
 	private final OdsayLegRouter router = new OdsayLegRouter(estimated, odsay);
+
+	@BeforeEach
+	void setUp() {
+		OdsayStubs.searchPathsCallSearchPath(odsay);
+	}
 
 	/** 도보 거리는 ODsay를 부르지 않는다 (ODsay는 700m 안을 거절하고, 도보는 운임이 0이다) */
 	@Test
@@ -64,6 +72,22 @@ class OdsayLegRouterTest {
 		assertThat(route.mode()).isEqualTo(LegMode.TRANSIT);
 		assertThat(route.fareKrw()).isNull();
 		assertThat(route.estimated()).isTrue();
+	}
+
+	/** 여러 구간은 대중교통 거리인 구간만 한 번에 부르고, 받지 못한 구간만 좌표 추정값이다 (결과는 요청 순서) */
+	@Test
+	void routeAllCallsOdsayOnceForTransitLegsOnly() {
+		LatLng farther = new LatLng(37.6136, 126.9826);
+		when(odsay.enabled()).thenReturn(true);
+		when(odsay.searchPath(STAY, FAR)).thenReturn(new OdsayRoute(19, 4629, 1550));
+		when(odsay.searchPath(FAR, farther)).thenThrow(new ApiException(ErrorCode.EXTERNAL_API_FAILED, "실패"));
+
+		List<LegRoute> routes = router.routeAll(List.of(new LegRouter.Endpoints(STAY, NEAR),
+				new LegRouter.Endpoints(STAY, FAR), new LegRouter.Endpoints(FAR, farther)));
+
+		assertThat(routes).containsExactly(estimated.route(STAY, NEAR),
+				new LegRoute(LegMode.TRANSIT, 4629, 19, 1550, false), estimated.route(FAR, farther));
+		verify(odsay).searchPaths(List.of(new OdsayClient.Endpoints(STAY, FAR), new OdsayClient.Endpoints(FAR, farther)));
 	}
 
 	@Test

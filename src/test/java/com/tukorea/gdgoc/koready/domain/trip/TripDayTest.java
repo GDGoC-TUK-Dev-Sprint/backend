@@ -12,6 +12,7 @@ import com.jayway.jsonpath.JsonPath;
 import com.tukorea.gdgoc.koready.infra.odsay.OdsayClient;
 import com.tukorea.gdgoc.koready.infra.odsay.OdsayRoute;
 import com.tukorea.gdgoc.koready.support.IntegrationTest;
+import com.tukorea.gdgoc.koready.support.OdsayStubs;
 import jakarta.persistence.EntityManager;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -63,6 +64,7 @@ class TripDayTest {
 
 	@BeforeEach
 	void seed() {
+		OdsayStubs.searchPathsCallSearchPath(odsay);
 		userId = insertUser();
 		assertThat(mvc.post().uri("/api/trips").header("X-Dev-User-Id", userId)
 				.contentType(MediaType.APPLICATION_JSON).content(TRIP).exchange()).hasStatus(HttpStatus.CREATED);
