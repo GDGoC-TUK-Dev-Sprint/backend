@@ -93,6 +93,12 @@ public class AuthService {
 		return issueTokens(user);
 	}
 
+	/** 로그아웃: 이 기기의 리프레시 토큰을 폐기한다. 없는 토큰이어도 오류 없이 끝난다(멱등). */
+	@Transactional
+	public void logout(String rawRefreshToken) {
+		refreshTokenRepository.deleteByTokenHash(jwtProvider.hash(rawRefreshToken));
+	}
+
 	private User createSocialUser(OauthProvider provider, OauthIdTokenVerifier.Identity identity,
 			String requestName) {
 		String name = firstNonBlank(identity.name(), requestName);
