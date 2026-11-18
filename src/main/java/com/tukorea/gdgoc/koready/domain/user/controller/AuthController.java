@@ -56,4 +56,15 @@ public class AuthController {
 	public TokenResponse refresh(@Valid @RequestBody RefreshRequest req) {
 		return authService.refresh(req.refreshToken());
 	}
+
+	/**
+	 * 로그아웃. 이 기기의 리프레시 토큰을 폐기한다.
+	 * 액세스 토큰이 만료돼도 로그아웃할 수 있게 액세스 토큰은 요구하지 않는다.
+	 * 이미 폐기·만료됐거나 없는 토큰이어도 204를 돌려준다(멱등).
+	 */
+	@PostMapping("/logout")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	public void logout(@Valid @RequestBody RefreshRequest req) {
+		authService.logout(req.refreshToken());
+	}
 }
