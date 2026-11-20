@@ -1,29 +1,22 @@
 package com.tukorea.gdgoc.koready.domain.expense.service;
 
-import com.tukorea.gdgoc.koready.domain.exchange.entity.Currency;
-import com.tukorea.gdgoc.koready.domain.exchange.entity.ExchangeRate;
+import com.tukorea.gdgoc.koready.domain.exchange.service.ExchangeService;
 import com.tukorea.gdgoc.koready.domain.expense.config.ExpenseProperties;
 import com.tukorea.gdgoc.koready.domain.expense.dto.CostEstimateResponse;
 import com.tukorea.gdgoc.koready.domain.expense.dto.MoneyRange;
 import com.tukorea.gdgoc.koready.domain.expense.entity.ExpenseItem;
 import com.tukorea.gdgoc.koready.domain.expense.entity.TripCostEstimate;
-import com.tukorea.gdgoc.koready.domain.expense.repository.ExchangeRateLookupRepository;
 import com.tukorea.gdgoc.koready.domain.expense.repository.TripCostEstimateRepository;
 import com.tukorea.gdgoc.koready.domain.trip.dto.TripResponse;
 import com.tukorea.gdgoc.koready.domain.trip.entity.Trip;
 import com.tukorea.gdgoc.koready.domain.trip.service.TripService;
 import com.tukorea.gdgoc.koready.global.dto.DisplayCurrency;
-import com.tukorea.gdgoc.koready.global.exception.ApiException;
-import com.tukorea.gdgoc.koready.global.exception.ErrorCode;
 import com.tukorea.gdgoc.koready.global.web.Language;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Clock;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,9 +35,8 @@ public class ExpenseService {
 	private final TripService tripService;
 	private final CostCalculator calculator;
 	private final TripCostEstimateRepository costEstimates;
-	private final ExchangeRateLookupRepository exchangeRates;
+	private final ExchangeService exchangeService;
 	private final ExpenseProperties properties;
-	private final Clock clock;
 
 	/** 예상 경비 화면. 동선을 만들기 전이면 {@code 409 ROUTE_NOT_CREATED} */
 	@Transactional(readOnly = true)
@@ -69,17 +61,12 @@ public class ExpenseService {
 		return tripService.toResponse(trip, language);
 	}
 
-	/** 표시 통화로 바꾸는 도구. 환율은 오늘(서울) 이전 가장 최근 고시 환율. 환율이 없으면 500 */
+	/** 표시 통화로 바꾸는 도구. 환율은 오늘(서울) 이전 가장 최근 고시 환율. 환율이 없으면 503 EXCHANGE_RATE_UNAVAILABLE */
 	private MoneyConverter converter(DisplayCurrency currency) {
 		if (currency == DisplayCurrency.KRW) {
 			return MoneyConverter.krw();
 		}
-		Currency rateCurrency = Currency.valueOf(currency.name());
-		ExchangeRate rate = exchangeRates.findLatest(rateCurrency, LocalDate.now(clock), PageRequest.of(0, 1))
-				.stream().findFirst()
-				.orElseThrow(() -> new ApiException(ErrorCode.INTERNAL_ERROR,
-						currency + " 환율 데이터가 없어 환산할 수 없습니다"));
-		return MoneyConverter.of(currency, rate.getKrwPerUnit());
+		return MoneyConverter.of(currency, exchangeService.krwPerUnit(currency));
 	}
 
 	private CostEstimateResponse toResponse(Trip trip, CostEstimate estimate, Language language,
