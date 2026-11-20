@@ -48,4 +48,20 @@ public class ExchangeRate {
 
 	@Column(nullable = false)
 	private Instant fetchedAt;
+
+	// [exchange] 추가: 수집한 환율 저장
+	public static ExchangeRate of(LocalDate rateDate, Currency currency, BigDecimal krwPerUnit, Instant fetchedAt) {
+		ExchangeRate rate = new ExchangeRate();
+		rate.rateDate = rateDate;
+		rate.currency = currency;
+		rate.krwPerUnit = krwPerUnit;
+		rate.fetchedAt = fetchedAt;
+		return rate;
+	}
+
+	// [exchange] 추가: 같은 고시일을 다시 받으면 값을 갱신한다
+	public void update(BigDecimal krwPerUnit, Instant fetchedAt) {
+		this.krwPerUnit = krwPerUnit;
+		this.fetchedAt = fetchedAt;
+	}
 }
