@@ -85,6 +85,22 @@ public class JwtProvider {
 		}
 	}
 
+	/** 서명이 맞는 액세스 토큰인데 만료됐으면 true (앱이 재발급하면 되는 경우). 위조·형식 오류·다른 종류 토큰은 false */
+	public boolean isExpiredAccessToken(String token) {
+		try {
+			SignedJWT jwt = SignedJWT.parse(token);
+			if (!jwt.verify(new MACVerifier(secret))) {
+				return false;
+			}
+			JWTClaimsSet claims = jwt.getJWTClaimsSet();
+			Date expiration = claims.getExpirationTime();
+			return expiration != null && !expiration.toInstant().isAfter(clock.instant())
+					&& "access".equals(claims.getStringClaim("type"));
+		} catch (ParseException | JOSEException e) {
+			return false;
+		}
+	}
+
 	public String newRefreshTokenValue() {
 		byte[] bytes = new byte[32];
 		random.nextBytes(bytes);

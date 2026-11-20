@@ -34,8 +34,8 @@ class SecurityConfigTest {
 
 	@Test
 	void accessTokenFromLoginCallsTripApis() throws Exception {
-		// 로컬 서버에서 손으로 가입한 아이디와 겹치지 않게 실행마다 다른 아이디
-		String loginId = "security-" + Long.toString(System.nanoTime(), 36);
+		// 로컬 서버에서 손으로 가입한 아이디와 겹치지 않게 실행마다 다른 아이디 (아이디 규칙: 영문 소문자·숫자·_)
+		String loginId = "security_" + Long.toString(System.nanoTime(), 36);
 		String authorization = "Bearer " + signUpAndLogIn(loginId, "password1234");
 
 		MvcTestResult created = mvc.post().uri("/api/trips")

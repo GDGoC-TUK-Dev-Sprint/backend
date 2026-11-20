@@ -61,11 +61,11 @@ public class AuthService {
 	@Transactional
 	public TokenResponse login(LoginRequest req) {
 		if (tooLongForBcrypt(req.password())) {
-			throw AuthErrors.unauthorized();
+			throw AuthErrors.loginFailed();
 		}
 		User user = userRepository.findByLoginId(req.loginId())
 				.filter(u -> passwordEncoder.matches(req.password(), u.getPasswordHash()))
-				.orElseThrow(AuthErrors::unauthorized);
+				.orElseThrow(AuthErrors::loginFailed);
 		return issueTokens(user);
 	}
 
@@ -84,13 +84,19 @@ public class AuthService {
 	@Transactional
 	public TokenResponse refresh(String rawRefreshToken) {
 		RefreshToken saved = refreshTokenRepository.findByTokenHash(jwtProvider.hash(rawRefreshToken))
-				.orElseThrow(AuthErrors::unauthorized);
+				.orElseThrow(AuthErrors::invalidRefreshToken);
 		if (!saved.getExpiresAt().isAfter(clock.instant())) {
-			throw AuthErrors.unauthorized();
+			throw AuthErrors.invalidRefreshToken();
 		}
 		User user = saved.getUser();
 		refreshTokenRepository.delete(saved);
 		return issueTokens(user);
+	}
+
+	/** 로그아웃: 이 기기의 리프레시 토큰을 폐기한다. 없는 토큰이어도 오류 없이 끝난다(멱등). */
+	@Transactional
+	public void logout(String rawRefreshToken) {
+		refreshTokenRepository.deleteByTokenHash(jwtProvider.hash(rawRefreshToken));
 	}
 
 	private User createSocialUser(OauthProvider provider, OauthIdTokenVerifier.Identity identity,
