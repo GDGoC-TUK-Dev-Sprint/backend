@@ -81,30 +81,3 @@ src/main/java/com/tukorea/gdgoc/koready/
 src/main/resources/
 └── application.properties
 ```
-
-
-
-## 오류 수정본
-로그아웃 API 추가 및 수정 
-
-## 작업 내용
-- POST /api/auth/logout 추가
-  - body: { "refreshToken": "..." }
-  - 성공 시 204 No Content, 해당 기기의 리프레시 토큰을 DB에서 삭제
-  - 이미 삭제됐거나 없는 토큰이어도 204 (여러 번 호출해도 같은 결과)
-  - 액세스 토큰이 만료돼도 로그아웃할 수 있게 Authorization 헤더는 필요 없음
-  - refreshToken이 비어 있으면 400 INVALID_REQUEST
-- 로그아웃 통합 테스트(LogoutTest) 추가
-
-## 앱(프론트) 참고
-- 로그아웃 응답이 성공이든 실패든 로컬 토큰을 지우고 로그인 화면으로 이동
-- 로그아웃 요청은 401 재발급 인터셉터에서 제외
-
-## 확인 필요
-- [ ] ./gradlew test 통과 확인 (로컬 Docker DB 필요)
-
-## 이번 PR에서 안 한 것 (회의 안건)
-- 인증 오류를 ErrorCode로 통일 (LOGIN_FAILED, INVALID_REFRESH_TOKEN, LOGIN_ID_TAKEN)
-- 아이디 규칙의 하이픈 허용 여부
-
-
