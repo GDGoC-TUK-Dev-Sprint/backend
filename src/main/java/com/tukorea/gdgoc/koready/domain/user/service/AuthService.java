@@ -61,11 +61,11 @@ public class AuthService {
 	@Transactional
 	public TokenResponse login(LoginRequest req) {
 		if (tooLongForBcrypt(req.password())) {
-			throw AuthErrors.unauthorized();
+			throw AuthErrors.loginFailed();
 		}
 		User user = userRepository.findByLoginId(req.loginId())
 				.filter(u -> passwordEncoder.matches(req.password(), u.getPasswordHash()))
-				.orElseThrow(AuthErrors::unauthorized);
+				.orElseThrow(AuthErrors::loginFailed);
 		return issueTokens(user);
 	}
 
@@ -84,9 +84,9 @@ public class AuthService {
 	@Transactional
 	public TokenResponse refresh(String rawRefreshToken) {
 		RefreshToken saved = refreshTokenRepository.findByTokenHash(jwtProvider.hash(rawRefreshToken))
-				.orElseThrow(AuthErrors::unauthorized);
+				.orElseThrow(AuthErrors::invalidRefreshToken);
 		if (!saved.getExpiresAt().isAfter(clock.instant())) {
-			throw AuthErrors.unauthorized();
+			throw AuthErrors.invalidRefreshToken();
 		}
 		User user = saved.getUser();
 		refreshTokenRepository.delete(saved);
