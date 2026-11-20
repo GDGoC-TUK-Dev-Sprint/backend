@@ -5,13 +5,14 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * 헤더 {@code Authorization: Bearer <액세스 토큰>}이 유효하면 로그인한 사용자 ID를 요청 속성에 넣는다.
- * 이후 {@link LoginUserId} 파라미터에 그 값이 전달된다. 토큰이 없거나 틀리면 아무것도 하지 않고,
- * 로그인이 필요한 API에서 LoginUserIdArgumentResolver가 UNAUTHORIZED로 막는다.
+ * 이후 {@link LoginUserId} 파라미터에 그 값이 전달된다. 토큰이 만료됐으면 만료 표시만 남기고,
+ * 로그인이 필요한 API에서 LoginUserIdArgumentResolver가 TOKEN_EXPIRED(만료)·UNAUTHORIZED(없음·틀림)로 막는다.
  */
 @Component
 class JwtLoginUserFilter extends OncePerRequestFilter {
@@ -27,8 +28,13 @@ class JwtLoginUserFilter extends OncePerRequestFilter {
 			throws ServletException, IOException {
 		String header = request.getHeader("Authorization");
 		if (header != null && header.startsWith("Bearer ")) {
-			jwtProvider.parseAccessToken(header.substring(7).trim())
-					.ifPresent(userId -> request.setAttribute(LoginUserIdArgumentResolver.REQUEST_ATTRIBUTE, userId));
+			String token = header.substring(7).trim();
+			Optional<Long> userId = jwtProvider.parseAccessToken(token);
+			if (userId.isPresent()) {
+				request.setAttribute(LoginUserIdArgumentResolver.REQUEST_ATTRIBUTE, userId.get());
+			} else if (jwtProvider.isExpiredAccessToken(token)) {
+				request.setAttribute(LoginUserIdArgumentResolver.EXPIRED_ATTRIBUTE, Boolean.TRUE);
+			}
 		}
 		chain.doFilter(request, response);
 	}
