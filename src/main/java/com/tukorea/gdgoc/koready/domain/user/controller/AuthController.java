@@ -7,6 +7,7 @@ import com.tukorea.gdgoc.koready.domain.user.dto.SignupRequest;
 import com.tukorea.gdgoc.koready.domain.user.dto.TokenResponse;
 import com.tukorea.gdgoc.koready.domain.user.service.AuthService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -33,10 +34,11 @@ public class AuthController {
 		authService.signup(req);
 	}
 
-	/** 회원가입-07 아이디 중복 확인 */
+	/** 회원가입-07 아이디 중복 확인. 형식이 틀리면 400 INVALID_REQUEST (available로 답하지 않는다) */
 	@GetMapping("/login-id/availability")
-	public Map<String, Boolean> availability(@RequestParam String loginId) {
-		return Map.of("available", authService.isLoginIdAvailable(loginId));
+	public Map<String, Object> availability(@RequestParam @Pattern(regexp = SignupRequest.LOGIN_ID_REGEX,
+			message = SignupRequest.LOGIN_ID_MESSAGE) String loginId) {
+		return Map.of("loginId", loginId, "available", authService.isLoginIdAvailable(loginId));
 	}
 
 	/** 로그인-01 */
