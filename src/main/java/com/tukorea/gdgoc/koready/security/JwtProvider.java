@@ -120,4 +120,9 @@ public class JwtProvider {
 	public Instant refreshExpiresAt() {
 		return clock.instant().plus(Duration.ofDays(refreshDays));
 	}
+
+	/** 지금 발급하는 액세스 토큰의 만료 시각 (createAccessToken과 같은 기준, AuthTokens.accessTokenExpiresAt) */
+	public Instant accessExpiresAt() {
+		return clock.instant().plus(Duration.ofMinutes(accessMinutes));
+	}
 }
