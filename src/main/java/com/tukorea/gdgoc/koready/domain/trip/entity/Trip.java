@@ -55,6 +55,9 @@ import org.locationtech.jts.geom.Point;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Trip {
 
+	/** {@code stay_name} 길이. 지도 핀은 핀 주소를 이름으로 쓰는데 이보다 길 수 있어 잘라 저장한다 */
+	static final int STAY_NAME_LENGTH = 200;
+
 	/** {@code stay_address} 길이. 장소 주소(addr1 + addr2, 각 200자)는 이보다 길 수 있어 잘라 저장한다 */
 	static final int STAY_ADDRESS_LENGTH = 300;
 
@@ -110,7 +113,7 @@ public class Trip {
 	@Column(length = 20)
 	private String stayAreaCode;
 
-	@Column(nullable = false, length = 200)
+	@Column(nullable = false, length = STAY_NAME_LENGTH)
 	private String stayName;
 
 	@Column(length = STAY_ADDRESS_LENGTH)
@@ -163,6 +166,13 @@ public class Trip {
 		return routeOutdated;
 	}
 
+	/** 동선을 만들 때 생기는 여행 제목. 확정한 여행은 바꿀 수 없다 ({@code 409 TRIP_CONFIRMED}) */
+	public void changeTitle(String titleKo, String titleEn) {
+		requireEditable();
+		this.titleKo = titleKo;
+		this.titleEn = titleEn;
+	}
+
 	/** 여행 일수 (2박 3일이면 3) */
 	public int getDays() {
 		return countDays(startDate, endDate);
@@ -208,7 +218,7 @@ public class Trip {
 		stayType = stay.type();
 		stayPlace = stay.place();
 		stayAreaCode = codeOf(stay.area());
-		stayName = stay.name();
+		stayName = truncate(stay.name(), STAY_NAME_LENGTH);
 		stayAddress = truncate(stay.address(), STAY_ADDRESS_LENGTH);
 		stayLocation = stay.location();
 		replaceCategories(conditions.categories());
@@ -250,5 +260,11 @@ public class Trip {
 			return value;
 		}
 		return value.substring(0, value.offsetByCodePoints(0, maxLength));
+	}
+	// [expense] 추가: 여행 확정 (확정한 여행은 편집할 수 없다)
+	public void confirm(Instant now) {
+		requireEditable();
+		status = TripStatus.CONFIRMED;
+		confirmedAt = now;
 	}
 }

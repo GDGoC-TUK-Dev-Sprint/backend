@@ -1,5 +1,7 @@
 package com.tukorea.gdgoc.koready.domain.trip.service;
 
+import com.tukorea.gdgoc.koready.domain.geo.dto.GeoReverseResponse;
+import com.tukorea.gdgoc.koready.domain.geo.service.GeoService;
 import com.tukorea.gdgoc.koready.domain.meta.entity.Area;
 import com.tukorea.gdgoc.koready.domain.meta.entity.Category;
 import com.tukorea.gdgoc.koready.domain.meta.entity.Nationality;
@@ -57,6 +59,7 @@ public class TripService {
 	private final TripRepository trips;
 	private final PlaceRepository places;
 	private final PlaceClassRepository placeClasses;
+	private final GeoService geoService;
 	private final TripProperties properties;
 	private final EntityManager entityManager;
 	private final Clock clock;
@@ -137,10 +140,10 @@ public class TripService {
 	}
 
 	/**
-	 * 같은 사용자의 여행 요청(만들기·조건 다시 저장)이 겹치지 않게 사용자 행을 잠근다. 잠그지 않으면 겹친 요청끼리
+	 * 같은 사용자의 여행 요청(만들기·조건 다시 저장·동선 만들기·확정)이 겹치지 않게 사용자 행을 잠근다. 잠그지 않으면 겹친 요청끼리
 	 * 한쪽 변경이 덮어써지거나 확정 전 여행이 둘이 될 수 있다. 사용자가 없으면(탈퇴) {@code 401}이다.
 	 */
-	private User lockUser(Long userId) {
+	User lockUser(Long userId) {
 		User user = entityManager.find(User.class, userId, LockModeType.PESSIMISTIC_WRITE);
 		if (user == null) {
 			throw new ApiException(ErrorCode.UNAUTHORIZED);
@@ -175,7 +178,11 @@ public class TripService {
 					errors.add("stay.areaCode", "AREA이면 필수입니다");
 				}
 			}
-			case PIN -> errors.add("stay.type", "지도 핀(PIN)은 아직 받지 않습니다");
+			case PIN -> {
+				if (stay.location() == null) {
+					errors.add("stay.location", "PIN이면 필수입니다");
+				}
+			}
 		}
 		errors.throwIfAny();
 		Set<Category> categories = request.categories() == null ? Set.of() : request.categories();
@@ -209,8 +216,28 @@ public class TripService {
 					.filter(place -> place.isLodging() && place.isActive())
 					.orElseThrow(() -> new ApiException(ErrorCode.PLACE_NOT_FOUND, "없는 숙박 장소입니다")));
 			case AREA -> TripConditions.Stay.of(stay.areaCode());
-			case PIN -> throw new IllegalStateException("PIN은 요청 검사에서 거절한다");
+			case PIN -> pin(stay.location());
 		};
+	}
+
+	/**
+	 * 지도 핀. 핀 위치 주소 API와 같은 Reverse Geocoding으로 주소와 서울 여부를 다시 확인하고, 핀 주소를 숙소 이름·주소로 둔다.
+	 * 서울 밖(바다·국외처럼 결과가 없는 곳 포함)이면 {@code 400 OUT_OF_SERVICE_AREA}, 호출이 실패하면 {@code 502 EXTERNAL_API_FAILED}다.
+	 * 여행 저장과 한 트랜잭션이라 DB 연결을 잡은 채 기다리고, 조건 다시 저장은 사용자 행도 잠근 채 기다린다
+	 * (네이버 시간 제한 안에서 같은 사용자의 다른 여행 요청만 기다린다. 잠그기 전에 부르면 확정·남의 여행보다 이 오류가 먼저 나온다).
+	 */
+	private TripConditions.Stay pin(LatLng location) {
+		GeoReverseResponse reverse = geoService.reverse(location.lat(), location.lng());
+		if (!reverse.inSeoul()) {
+			throw new ApiException(ErrorCode.OUT_OF_SERVICE_AREA);
+		}
+		FieldErrors errors = new FieldErrors();
+		if (reverse.address() == null) {
+			// 서울 안인데 도로명·지번 주소가 모두 없는 곳. 숙소 이름으로 쓸 주소가 없다
+			errors.add("stay.location", "주소가 없는 위치입니다");
+		}
+		errors.throwIfAny();
+		return TripConditions.Stay.of(location.toPoint(), reverse.address());
 	}
 
 	/** 국적. 목록에서 빠진 코드면 코드를 이름으로 준다 */
@@ -237,7 +264,8 @@ public class TripService {
 				.toList();
 	}
 
-	private static TripResponse.Stay stay(Trip trip, Language language) {
+	/** 여행의 숙소. 일자별 일정(TripDayService)도 같은 이름·좌표를 쓴다 */
+	static TripResponse.Stay stay(Trip trip, Language language) {
 		Place place = trip.getStayPlace();
 		// 지도 핀이면 저장한 핀 주소, 목록에서 빠진 지역이면 저장한 지역 이름(국문)
 		String nameKo = trip.getStayName();
@@ -257,5 +285,17 @@ public class TripService {
 	/** 저장된 코드의 상수. 국적·지역 목록이 잠정이라, 지난 여행에 목록에서 빠진 코드가 남아 있을 수 있다 */
 	private static <E extends Enum<E>> Optional<E> find(Class<E> type, String code) {
 		return Arrays.stream(type.getEnumConstants()).filter(constant -> constant.name().equals(code)).findFirst();
+	}
+	// [expense] 추가: 여행 확정. 동선을 만들기 전이면 409 ROUTE_NOT_CREATED, 이미 확정했으면 409 TRIP_CONFIRMED
+	@Transactional
+	public Trip confirm(Long userId, Long tripId) {
+		lockUser(userId);
+		Trip trip = findMyTrip(userId, tripId);
+		trip.requireEditable();
+		if (!trips.hasDays(trip.getId())) {
+			throw new ApiException(ErrorCode.ROUTE_NOT_CREATED);
+		}
+		trip.confirm(clock.instant());
+		return trip;
 	}
 }

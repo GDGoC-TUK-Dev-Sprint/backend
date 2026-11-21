@@ -2,30 +2,30 @@ package com.tukorea.gdgoc.koready.domain.geo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyDouble;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.tukorea.gdgoc.koready.global.exception.ApiException;
 import com.tukorea.gdgoc.koready.global.exception.ErrorCode;
 import com.tukorea.gdgoc.koready.infra.naver.GeocodeAddress;
+import com.tukorea.gdgoc.koready.infra.naver.LocalSearchPlace;
 import com.tukorea.gdgoc.koready.infra.naver.NaverMapsClient;
+import com.tukorea.gdgoc.koready.infra.naver.NaverSearchClient;
 import com.tukorea.gdgoc.koready.infra.naver.ReverseGeocodeResult;
 import com.tukorea.gdgoc.koready.support.IntegrationTest;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
 /**
  * 지도에서 숙소 위치 선택의 주소·장소명 검색과 핀 위치 주소. 로그인 없이 부른다.
- * 네이버 클라이언트는 가짜이고(호출·응답 읽기는 NaverMapsClientTest), 장소 결과는 덤프 데이터 기준이다.
+ * 네이버 클라이언트는 가짜다 (호출·응답 읽기는 NaverMapsClientTest·NaverSearchClientTest).
  */
 @IntegrationTest
 class GeoTest {
@@ -35,17 +35,22 @@ class GeoTest {
 	private static final GeocodeAddress CHUNCHEON = new GeocodeAddress("강원특별자치도 춘천시 명동길 14",
 			"강원특별자치도 춘천시 중앙로2가 23-1", "14, Myeongdong-gil, Chuncheon-si, Gangwon-do, Republic of Korea",
 			"강원특별자치도", 37.8793856, 127.7270855);
+	private static final LocalSearchPlace MYEONGDONG_STATION = new LocalSearchPlace("명동역 4호선", null,
+			"서울특별시 중구 퇴계로 126", "서울특별시 중구 충무로2가 109-2", 37.560972, 126.9864649);
+	private static final LocalSearchPlace MYEONGDONG_KYOJA = new LocalSearchPlace("명동교자 1호점",
+			"http://www.mdkj.co.kr/", "서울특별시 중구 명동10길 10 명동교자", "서울특별시 중구 명동2가 33-4 명동교자",
+			37.5634828, 126.9851666);
 
 	@Autowired
 	MockMvcTester mvc;
 
-	@Autowired
-	JdbcTemplate jdbc;
-
 	@MockitoBean
 	NaverMapsClient naverMaps;
 
-	/** 주소 결과(서울 먼저, 최대 5개) 다음에 장소 결과(최대 5개)다. 장소는 이름이 정확히 맞는 것 → 앞부분이 맞는 것 중 신호가 많은 순 */
+	@MockitoBean
+	NaverSearchClient naverSearch;
+
+	/** 주소 결과(서울 먼저, 최대 5개) 다음에 장소 결과(네이버 지역 검색, 네이버 순서 그대로 최대 5개)다 */
 	@Test
 	void addressesThenPlaces() {
 		given(naverMaps.geocode("명동", 20)).willReturn(List.of(
@@ -55,30 +60,26 @@ class GeoTest {
 				seoul(null, "서울특별시 중구 명동2가 83-5", null, 37.5634, 126.9828),
 				seoul("서울특별시 중구 명동8길 10", null, null, 37.5612, 126.9851),
 				seoul("서울특별시 중구 명동10길 19", null, null, 37.5620, 126.9858)));
+		given(naverSearch.searchLocal("명동", 5)).willReturn(List.of(MYEONGDONG_STATION, MYEONGDONG_KYOJA));
 
 		MvcTestResult result = search("명동");
 
 		assertThat(result).hasStatusOk().bodyJson().extractingPath("$.items[*].type").isEqualTo(List.of(
-				"ADDRESS", "ADDRESS", "ADDRESS", "ADDRESS", "ADDRESS", "PLACE", "PLACE", "PLACE", "PLACE", "PLACE"));
+				"ADDRESS", "ADDRESS", "ADDRESS", "ADDRESS", "ADDRESS", "PLACE", "PLACE"));
 		assertThat(result).bodyJson().extractingPath("$.items[*].label").isEqualTo(List.of(
 				// 서울 주소가 네이버 순서대로 먼저 오고, 서울 밖(춘천)은 6번째로 밀려 빠진다. 도로명이 없으면 지번
 				"서울특별시 중구 명동", "서울특별시 중구 명동길 14 Noon Square", "서울특별시 중구 명동2가 83-5",
 				"서울특별시 중구 명동8길 10", "서울특별시 중구 명동10길 19",
-				// 신호 0인 "명동 영양센터"는 가나다순으로 앞서도 신호 1인 곳 뒤다
-				"명동", "명동 남대문 북창동 다동무교동 관광특구", "명동교자", "명동돈가스", "명동쭈꾸미"));
-		assertThat(result).bodyJson().extractingPath("$.items[*].address").isEqualTo(List.of(
-				"서울특별시 중구 명동", "서울특별시 중구 명동길 14 Noon Square", "서울특별시 중구 명동2가 83-5",
-				"서울특별시 중구 명동8길 10", "서울특별시 중구 명동10길 19",
-				"서울특별시 중구 명동2가", "서울특별시 중구 세종대로 40 (남대문로4가)", "서울특별시 중구 퇴계로 129 (충무로2가)",
-				"서울특별시 중구 명동3길 8 (명동1가)", "서울특별시 중구 퇴계로6길 3-28 (회현동1가)"));
-		assertThat(result).bodyJson().extractingPath("$.items[*].inSeoul").asArray().hasSize(10).containsOnly(true);
+				"명동역 4호선", "명동교자 1호점"));
+		assertThat(result).bodyJson().extractingPath("$.items[*].inSeoul").asArray().hasSize(7).containsOnly(true);
 		assertThat(result).bodyJson().extractingPath("$.items[0].location")
 				.isEqualTo(Map.of("lat", 37.5609, "lng", 126.9863));
-		Map<String, Object> place = jdbc.queryForMap("""
-				SELECT ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng FROM places WHERE content_id = '264311'
-				""");
+		assertThat(result).bodyJson().extractingPath("$.items[0].link").isNull();
+		assertThat(result).bodyJson().extractingPath("$.items[5].address").isEqualTo("서울특별시 중구 퇴계로 126");
 		assertThat(result).bodyJson().extractingPath("$.items[5].location")
-				.isEqualTo(Map.of("lat", place.get("lat"), "lng", place.get("lng")));
+				.isEqualTo(Map.of("lat", 37.560972, "lng", 126.9864649));
+		assertThat(result).bodyJson().extractingPath("$.items[5].link").isNull();
+		assertThat(result).bodyJson().extractingPath("$.items[6].link").isEqualTo("http://www.mdkj.co.kr/");
 	}
 
 	/** 서울 밖 주소는 서울 주소 뒤에 inSeoul = false로 온다. 주소가 없는 결과는 뺀다 */
@@ -88,52 +89,56 @@ class GeoTest {
 				CHUNCHEON,
 				new GeocodeAddress(null, null, null, "서울특별시", 37.56, 126.98),
 				seoul("서울특별시 중구 명동길 14 Noon Square", null, null, 37.5634327, 126.9828804)));
+		given(naverSearch.searchLocal("명동길 14", 5)).willReturn(List.of());
 
 		assertThat(search("명동길 14")).hasStatusOk().bodyJson().isStrictlyEqualTo("""
 				{"items": [
 				  {"type": "ADDRESS", "label": "서울특별시 중구 명동길 14 Noon Square",
 				   "address": "서울특별시 중구 명동길 14 Noon Square",
-				   "location": {"lat": 37.5634327, "lng": 126.9828804}, "inSeoul": true},
+				   "location": {"lat": 37.5634327, "lng": 126.9828804}, "inSeoul": true, "link": null},
 				  {"type": "ADDRESS", "label": "강원특별자치도 춘천시 명동길 14", "address": "강원특별자치도 춘천시 명동길 14",
-				   "location": {"lat": 37.8793856, "lng": 127.7270855}, "inSeoul": false}]}
+				   "location": {"lat": 37.8793856, "lng": 127.7270855}, "inSeoul": false, "link": null}]}
 				""");
 	}
 
-	/** 영어로 요청하면 주소 결과는 영문 주소(없으면 국문)다. 장소는 영문명이 비어 있어 국문이다 */
+	/** 영어로 요청하면 주소 결과는 영문 주소(없으면 국문)다. 장소 결과는 네이버가 준 국문 그대로다 */
 	@Test
 	void englishRequest() {
 		given(naverMaps.geocode("명동", 20)).willReturn(List.of(
 				MYEONGDONG, seoul("서울특별시 중구 명동길 14 Noon Square", null, null, 37.5634327, 126.9828804)));
+		given(naverSearch.searchLocal("명동", 5)).willReturn(List.of(MYEONGDONG_KYOJA));
 
 		MvcTestResult result = mvc.get().uri("/api/geo/search").param("query", "명동").header("Accept-Language", "en")
 				.exchange();
 
 		assertThat(result).hasStatusOk().bodyJson().extractingPath("$.items[*].label").isEqualTo(List.of(
-				"Myeong-dong, Jung-gu, Seoul, Republic of Korea", "서울특별시 중구 명동길 14 Noon Square",
-				"명동", "명동 남대문 북창동 다동무교동 관광특구", "명동교자", "명동돈가스", "명동쭈꾸미"));
+				"Myeong-dong, Jung-gu, Seoul, Republic of Korea", "서울특별시 중구 명동길 14 Noon Square", "명동교자 1호점"));
 		assertThat(result).bodyJson().extractingPath("$.items[0].address")
 				.isEqualTo("Myeong-dong, Jung-gu, Seoul, Republic of Korea");
-		assertThat(result).bodyJson().extractingPath("$.items[2].address").isEqualTo("서울특별시 중구 명동2가");
+		assertThat(result).bodyJson().extractingPath("$.items[2].address").isEqualTo("서울특별시 중구 명동10길 10 명동교자");
 	}
 
-	/** 이름 앞부분이 맞는 곳이 신호가 더 많은 곳보다 먼저다. 숙박도 찾고, 사라진 장소·제외 분류는 뺀다 */
+	/**
+	 * 장소 결과는 서울 밖이 섞여 있어도 네이버 순서 그대로다 (주소 결과처럼 서울을 앞으로 올리지 않는다).
+	 * 주소는 도로명, 없으면 지번이고, 서울인지는 그 주소의 시도 이름으로 본다
+	 */
 	@Test
-	void placeResults() {
-		given(naverMaps.geocode(anyString(), anyInt())).willReturn(List.of());
+	void placeResultsKeepNaverOrder() {
+		given(naverMaps.geocode("경복궁", 20)).willReturn(List.of());
+		given(naverSearch.searchLocal("경복궁", 5)).willReturn(List.of(
+				new LocalSearchPlace("경복궁 한옥마을점", "http://www.entas.co.kr/", "인천광역시 연수구 테크노파크로 180",
+						"인천광역시 연수구 송도동 24-17", 37.3907929, 126.6388695),
+				new LocalSearchPlace("경복궁", "https://royal.khs.go.kr/gbg", null, "서울특별시 종로구 세종로 1-1 경복궁",
+						37.5788408, 126.9770162),
+				new LocalSearchPlace("주소 없음", null, null, null, 37.5, 127.0)));
 
-		assertThat(search("경복궁")).hasStatusOk().bodyJson().extractingPath("$.items[*].label").isEqualTo(List.of(
-				"경복궁", "경복궁 별빛야행", "경복궁 생과방", "경복궁에 맛있는 부엌",
-				// 신호 1이지만 이름 앞부분이 맞지 않는다
-				"한복남 경복궁점"));
-		assertThat(search("남산호스텔")).bodyJson().extractingPath("$.items[*].label")
-				.isEqualTo(List.of("남산호스텔"));
+		MvcTestResult result = search("경복궁");
 
-		jdbc.update("UPDATE places SET active = false WHERE name_ko = '남산호스텔'");
-		assertThat(search("남산호스텔")).bodyJson().extractingPath("$.items").asArray().isEmpty();
-
-		jdbc.update("UPDATE place_classes SET excluded = true WHERE code = 'EV'");
-		assertThat(search("경복궁")).bodyJson().extractingPath("$.items[*].label")
-				.isEqualTo(List.of("경복궁", "경복궁에 맛있는 부엌", "한복남 경복궁점"));
+		assertThat(result).hasStatusOk().bodyJson().extractingPath("$.items[*].label")
+				.isEqualTo(List.of("경복궁 한옥마을점", "경복궁", "주소 없음"));
+		assertThat(result).bodyJson().extractingPath("$.items[*].address").isEqualTo(Arrays.asList(
+				"인천광역시 연수구 테크노파크로 180", "서울특별시 종로구 세종로 1-1 경복궁", null));
+		assertThat(result).bodyJson().extractingPath("$.items[*].inSeoul").isEqualTo(List.of(false, true, false));
 	}
 
 	/** 검색어는 앞뒤 공백을 빼고 2~100자다. 검사에 걸리면 네이버를 부르지 않는다 */
@@ -151,14 +156,20 @@ class GeoTest {
 		assertThat(mvc.get().uri("/api/geo/search")).hasStatus(HttpStatus.BAD_REQUEST).bodyJson().isLenientlyEqualTo("""
 				{"fields": [{"field": "query", "reason": "필수입니다"}]}
 				""");
-		verifyNoInteractions(naverMaps);
+		verifyNoInteractions(naverMaps, naverSearch);
 	}
 
+	/** Geocoding·지역 검색 중 하나라도 실패하면 성공한 쪽 결과도 주지 않고 502다 */
 	@Test
 	void searchNaverFailure() {
 		given(naverMaps.geocode("명동", 20)).willThrow(new ApiException(ErrorCode.EXTERNAL_API_FAILED));
-
 		assertThat(search("명동")).hasStatus(HttpStatus.BAD_GATEWAY).bodyJson().isLenientlyEqualTo("""
+				{"code": "EXTERNAL_API_FAILED"}
+				""");
+
+		given(naverMaps.geocode("명동역", 20)).willReturn(List.of(MYEONGDONG));
+		given(naverSearch.searchLocal("명동역", 5)).willThrow(new ApiException(ErrorCode.EXTERNAL_API_FAILED));
+		assertThat(search("명동역")).hasStatus(HttpStatus.BAD_GATEWAY).bodyJson().isLenientlyEqualTo("""
 				{"code": "EXTERNAL_API_FAILED"}
 				""");
 	}

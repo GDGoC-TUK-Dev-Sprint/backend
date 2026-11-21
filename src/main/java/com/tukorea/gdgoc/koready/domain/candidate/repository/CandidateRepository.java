@@ -21,16 +21,9 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class CandidateRepository {
 
-	/** 후보 범위: 사라진 장소, 숙박, 제외 분류, 여행 기간과 겹치지 않는 축제·행사를 뺀다 */
-	private static final String SCOPE = """
-			p.active
-			    AND p.class1_code <> 'AC'
-			    AND %s
-			    AND (p.event_end_date IS NULL OR p.event_end_date >= :startDate)
-			    AND (p.event_start_date IS NULL OR p.event_start_date <= :endDate)
-			""".formatted(PlaceSql.NOT_EXCLUDED);
-	private static final String IN_CATEGORIES = SCOPE + "    AND p.class1_code IN (:categories)\n";
-	private static final String NAME_MATCHES = SCOPE + "    AND (p.name_ko ILIKE :pattern OR p.name_en ILIKE :pattern)\n";
+	private static final String IN_CATEGORIES = PlaceSql.CANDIDATE_SCOPE + "    AND p.class1_code IN (:categories)\n";
+	private static final String NAME_MATCHES = PlaceSql.CANDIDATE_SCOPE
+			+ "    AND (p.name_ko ILIKE :pattern OR p.name_en ILIKE :pattern)\n";
 
 	/** 점수 = 신호 개수 × 신호 1개의 거리(설정값) − 숙소 직선거리(m). %s는 범위 조건 */
 	private static final String SCORED = """

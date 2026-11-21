@@ -4,16 +4,13 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.tukorea.gdgoc.koready.global.exception.ApiException;
 import com.tukorea.gdgoc.koready.global.exception.ErrorCode;
 import java.math.BigDecimal;
-import java.net.http.HttpClient;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -35,7 +32,9 @@ public class NaverMapsClient {
 
 	@Autowired
 	NaverMapsClient(RestClient.Builder builder, NaverMapsProperties properties) {
-		this(configure(builder, properties).requestFactory(requestFactory(properties)).build());
+		this(configure(builder, properties)
+				.requestFactory(NaverHttp.requestFactory(properties.connectTimeout(), properties.readTimeout()))
+				.build());
 	}
 
 	NaverMapsClient(RestClient restClient) {
@@ -50,16 +49,9 @@ public class NaverMapsClient {
 				.defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE);
 	}
 
-	private static JdkClientHttpRequestFactory requestFactory(NaverMapsProperties properties) {
-		HttpClient httpClient = HttpClient.newBuilder().connectTimeout(properties.connectTimeout()).build();
-		JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-		factory.setReadTimeout(properties.readTimeout());
-		return factory;
-	}
-
 	/** 주소 검색 결과를 네이버 순서대로 최대 count개 준다. 네이버는 주소만 찾는다 (장소명은 결과가 없다). 좌표를 읽지 못한 곳은 뺀다 */
 	public List<GeocodeAddress> geocode(String query, int count) {
-		return call("Geocoding", () -> {
+		return NaverHttp.call("Geocoding", () -> {
 			GeocodeBody body = restClient.get()
 					.uri(GEOCODE_PATH + "?query={query}&count={count}", query, count)
 					.retrieve()
@@ -77,7 +69,7 @@ public class NaverMapsClient {
 
 	/** 좌표의 주소와 법정동 코드. 결과가 없으면(바다·국외) 모두 null이다 */
 	public ReverseGeocodeResult reverseGeocode(double lat, double lng) {
-		return call("Reverse Geocoding", () -> {
+		return NaverHttp.call("Reverse Geocoding", () -> {
 			ReverseBody body = restClient.get()
 					.uri(REVERSE_GEOCODE_PATH + "?coords={lng},{lat}&orders=legalcode,roadaddr,addr&output=json",
 							BigDecimal.valueOf(lng).toPlainString(), BigDecimal.valueOf(lat).toPlainString())
@@ -104,17 +96,6 @@ public class NaverMapsClient {
 			}
 			return new ReverseGeocodeResult(legalCode, roadAddress, jibunAddress);
 		});
-	}
-
-	/** 네이버를 부르고 응답을 읽는다. 그 사이의 실패는 모두 502다 (원인은 서버 로그에만 남는다) */
-	private static <T> T call(String api, Supplier<T> request) {
-		try {
-			return request.get();
-		} catch (ApiException e) {
-			throw e;
-		} catch (RuntimeException e) {
-			throw new ApiException(ErrorCode.EXTERNAL_API_FAILED, "네이버 " + api + " 호출에 실패했습니다", e);
-		}
 	}
 
 	/** 좌표(x 경도·y 위도 문자열)를 읽지 못하면 null */

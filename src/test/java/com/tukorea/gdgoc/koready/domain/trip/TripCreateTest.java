@@ -266,7 +266,7 @@ class TripCreateTest {
 				.hasStatus(HttpStatus.BAD_REQUEST)
 				.bodyJson()
 				.isLenientlyEqualTo("""
-						{"fields": [{"field": "stay.type"}]}
+						{"fields": [{"field": "stay.location", "reason": "PIN이면 필수입니다"}]}
 						""");
 	}
 
