@@ -237,8 +237,51 @@ class TripCreateTest {
 						  {"field": "startDate", "reason": "오늘(서울) 이후여야 합니다"},
 						  {"field": "endDate", "reason": "시작일과 같거나 뒤여야 합니다"},
 						  {"field": "partySize", "reason": "1~10명이어야 합니다"},
-						  {"field": "budgetPerPerson.currency", "reason": "지금은 KRW만 받습니다"},
 						  {"field": "stay.placeId", "reason": "PLACE이면 필수입니다"}]}
+						""");
+	}
+
+	@Test
+	void foreignBudgetIsSavedInKrw() {
+		jdbc.update("DELETE FROM exchange_rates WHERE currency = 'USD'");
+		jdbc.update("""
+				INSERT INTO exchange_rates (rate_date, currency, krw_per_unit, fetched_at)
+				VALUES ('2026-10-30', 'USD', 1400.0000, now())
+				""");
+
+		create(areaTrip("2026-11-10", "2026-11-12")
+				.replace("\"partySize\": 2", "\"partySize\": 2, \"budgetPerPerson\": {\"amount\": 100.5, \"currency\": \"USD\"}"));
+
+		assertThat(jdbc.queryForObject("SELECT budget_per_person_krw FROM trips WHERE user_id = ?", Integer.class, userId))
+				.isEqualTo(140_700);
+	}
+
+	@Test
+	void foreignBudgetNeedsExchangeRate() {
+		jdbc.update("DELETE FROM exchange_rates");
+
+		assertThat(post(areaTrip("2026-11-10", "2026-11-12")
+				.replace("\"partySize\": 2", "\"partySize\": 2, \"budgetPerPerson\": {\"amount\": 100, \"currency\": \"EUR\"}")))
+				.hasStatus(HttpStatus.SERVICE_UNAVAILABLE)
+				.bodyJson()
+				.extractingPath("$.code").isEqualTo("EXCHANGE_RATE_UNAVAILABLE");
+	}
+
+	@Test
+	void budgetDecimalsFollowCurrency() {
+		assertThat(post(areaTrip("2026-11-10", "2026-11-12")
+				.replace("\"partySize\": 2", "\"partySize\": 2, \"budgetPerPerson\": {\"amount\": 10.555, \"currency\": \"USD\"}")))
+				.hasStatus(HttpStatus.BAD_REQUEST)
+				.bodyJson()
+				.isLenientlyEqualTo("""
+						{"code": "INVALID_REQUEST", "fields": [{"field": "budgetPerPerson.amount", "reason": "소수 둘째 자리까지여야 합니다"}]}
+						""");
+		assertThat(post(areaTrip("2026-11-10", "2026-11-12")
+				.replace("\"partySize\": 2", "\"partySize\": 2, \"budgetPerPerson\": {\"amount\": 1000.5, \"currency\": \"JPY\"}")))
+				.hasStatus(HttpStatus.BAD_REQUEST)
+				.bodyJson()
+				.isLenientlyEqualTo("""
+						{"code": "INVALID_REQUEST", "fields": [{"field": "budgetPerPerson.amount", "reason": "엔 단위 정수여야 합니다"}]}
 						""");
 	}
 

@@ -1,5 +1,6 @@
 package com.tukorea.gdgoc.koready.domain.trip.service;
 
+import com.tukorea.gdgoc.koready.domain.exchange.service.ExchangeService;
 import com.tukorea.gdgoc.koready.domain.geo.dto.GeoReverseResponse;
 import com.tukorea.gdgoc.koready.domain.geo.service.GeoService;
 import com.tukorea.gdgoc.koready.domain.meta.entity.Area;
@@ -19,7 +20,6 @@ import com.tukorea.gdgoc.koready.domain.trip.entity.TripConditions;
 import com.tukorea.gdgoc.koready.domain.trip.repository.TripRepository;
 import com.tukorea.gdgoc.koready.domain.user.entity.User;
 import com.tukorea.gdgoc.koready.global.dto.Code;
-import com.tukorea.gdgoc.koready.global.dto.DisplayCurrency;
 import com.tukorea.gdgoc.koready.global.dto.LatLng;
 import com.tukorea.gdgoc.koready.global.dto.Money;
 import com.tukorea.gdgoc.koready.global.exception.ApiException;
@@ -63,6 +63,7 @@ public class TripService {
 	private final TripProperties properties;
 	private final EntityManager entityManager;
 	private final Clock clock;
+	private final ExchangeService exchangeService;
 
 	/**
 	 * 여행을 만든다. 끝나지 않은 확정 여행이 있으면 거절하고, 남아 있던 확정 전 여행은 지운다.
@@ -165,7 +166,7 @@ public class TripService {
 		if (request.partySize() < 1 || request.partySize() > properties.maxPartySize()) {
 			errors.add("partySize", "1~" + properties.maxPartySize() + "명이어야 합니다");
 		}
-		Integer budgetKrw = budgetKrw(request.budgetPerPerson(), errors);
+		checkBudget(request.budgetPerPerson(), errors);
 		TripRequest.Stay stay = request.stay();
 		switch (stay.type()) {
 			case PLACE -> {
@@ -185,29 +186,41 @@ public class TripService {
 			}
 		}
 		errors.throwIfAny();
+		Integer budgetKrw = budgetKrw(request.budgetPerPerson());
 		Set<Category> categories = request.categories() == null ? Set.of() : request.categories();
 		return new TripConditions(request.nationality(), request.startDate(), request.endDate(), request.partySize(),
 				budgetKrw, categories, resolveStay(stay));
 	}
 
-	/** 희망 예산(원). 환율 환산이 생기기 전에는 원화만 받는다 */
-	private static Integer budgetKrw(Money budget, FieldErrors errors) {
+	/**
+	 * 희망 예산 형식 검사. 원·엔은 정수, 달러·유로는 소수 둘째 자리까지. 원화 환산은 다른 입력 오류를 다 모은 뒤 {@link #budgetKrw}에서 한다.
+	 */
+	private static void checkBudget(Money budget, FieldErrors errors) {
+		if (budget == null) {
+			return;
+		}
+		if (!budget.currency().fits(budget.amount())) {
+			errors.add("budgetPerPerson.amount", switch (budget.currency()) {
+				case KRW -> "원 단위 정수여야 합니다";
+				case JPY -> "엔 단위 정수여야 합니다";
+				case USD, EUR -> "소수 둘째 자리까지여야 합니다";
+			});
+		} else if (budget.amount().compareTo(MAX_BUDGET_KRW) > 0) {
+			// 표시 통화는 모두 1단위가 1원 이상이라, 금액만으로 한도를 넘으면 원화로 바꿔도 넘는다
+			errors.add("budgetPerPerson.amount", "너무 큽니다");
+		}
+	}
+
+	/** 희망 예산(원). 외화는 오늘(서울) 환율로 바꾼다. 환율이 없으면 {@code 503 EXCHANGE_RATE_UNAVAILABLE} */
+	private Integer budgetKrw(Money budget) {
 		if (budget == null) {
 			return null;
 		}
-		if (budget.currency() != DisplayCurrency.KRW) {
-			errors.add("budgetPerPerson.currency", "지금은 KRW만 받습니다");
-			return null;
+		long krw = exchangeService.toKrw(budget);
+		if (krw > Integer.MAX_VALUE) {
+			new FieldErrors().add("budgetPerPerson.amount", "너무 큽니다").throwIfAny();
 		}
-		if (budget.amount().stripTrailingZeros().scale() > 0) {
-			errors.add("budgetPerPerson.amount", "원 단위 정수여야 합니다");
-			return null;
-		}
-		if (budget.amount().compareTo(MAX_BUDGET_KRW) > 0) {
-			errors.add("budgetPerPerson.amount", "너무 큽니다");
-			return null;
-		}
-		return budget.amount().intValueExact();
+		return (int) krw;
 	}
 
 	private TripConditions.Stay resolveStay(TripRequest.Stay stay) {
@@ -286,16 +299,27 @@ public class TripService {
 	private static <E extends Enum<E>> Optional<E> find(Class<E> type, String code) {
 		return Arrays.stream(type.getEnumConstants()).filter(constant -> constant.name().equals(code)).findFirst();
 	}
-	// [expense] 추가: 여행 확정. 동선을 만들기 전이면 409 ROUTE_NOT_CREATED, 이미 확정했으면 409 TRIP_CONFIRMED
+	/**
+	 * [expense] 추가: 여행 확정 (API 명세 26). 새로 확정했으면 true, 이미 확정한 여행이면 아무것도 바꾸지 않고 false (그대로 200).
+	 * 동선을 만들기 전이면 409 ROUTE_NOT_CREATED, 끝나지 않은 다른 확정 여행이 있으면 409 ACTIVE_TRIP_EXISTS (activeTripId).
+	 */
 	@Transactional
-	public Trip confirm(Long userId, Long tripId) {
+	public boolean confirm(Long userId, Long tripId) {
 		lockUser(userId);
 		Trip trip = findMyTrip(userId, tripId);
-		trip.requireEditable();
+		if (!trip.isEditable()) {
+			return false;
+		}
 		if (!trips.hasDays(trip.getId())) {
 			throw new ApiException(ErrorCode.ROUTE_NOT_CREATED);
 		}
+		List<Long> otherActiveTripIds = trips.findActiveTripIds(userId, LocalDate.now(clock)).stream()
+				.filter(id -> !id.equals(trip.getId()))
+				.toList();
+		if (!otherActiveTripIds.isEmpty()) {
+			throw new ApiException(ErrorCode.ACTIVE_TRIP_EXISTS, Map.of("activeTripId", otherActiveTripIds.getFirst()));
+		}
 		trip.confirm(clock.instant());
-		return trip;
+		return true;
 	}
 }
