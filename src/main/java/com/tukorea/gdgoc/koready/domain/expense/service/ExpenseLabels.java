@@ -1,23 +1,12 @@
 package com.tukorea.gdgoc.koready.domain.expense.service;
 
-import com.tukorea.gdgoc.koready.domain.expense.entity.ExpenseItem;
 import com.tukorea.gdgoc.koready.global.dto.Code;
 import com.tukorea.gdgoc.koready.global.web.Language;
 
-/** 경비 항목·근거 데이터의 화면 이름 */
+/** 경비 항목 근거 데이터의 설명 문장 (항목 이름은 코드만 주고 프론트가 매핑한다) */
 final class ExpenseLabels {
 
 	private ExpenseLabels() {}
-
-	static Code item(ExpenseItem item, Language language) {
-		return new Code(item.name(), switch (item) {
-			case FOOD -> language.pick("식비", "Food");
-			case SIGHTSEEING -> language.pick("관광·입장료", "Sightseeing & admission");
-			case TRANSPORT -> language.pick("교통", "Transportation");
-			case SHOPPING -> language.pick("쇼핑", "Shopping");
-			case OTHER -> language.pick("기타", "Other");
-		});
-	}
 
 	static Code source(CostEstimate.Source source, int referenceStayDays, Language language) {
 		return new Code(source.name(), switch (source) {
