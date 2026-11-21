@@ -34,9 +34,14 @@ final class MoneyConverter {
 	}
 
 	MoneyRange range(CostEstimate.Range range) {
+		return range(range.min(), range.max());
+	}
+
+	/** 원화 범위 (인원 합계·예산 차이처럼 int를 넘을 수 있는 값) */
+	MoneyRange range(long minKrw, long maxKrw) {
 		return new MoneyRange(
-				roundToRangeUnit(toDisplay(range.min()), RoundingMode.FLOOR),
-				roundToRangeUnit(toDisplay(range.max()), RoundingMode.CEILING),
+				roundToRangeUnit(toDisplay(minKrw), RoundingMode.FLOOR),
+				roundToRangeUnit(toDisplay(maxKrw), RoundingMode.CEILING),
 				currency);
 	}
 
@@ -46,6 +51,10 @@ final class MoneyConverter {
 			return Money.krw(krw);
 		}
 		return new Money(toDisplay(krw).setScale(currency.fractionDigits(), RoundingMode.HALF_UP), currency);
+	}
+
+	DisplayCurrency currency() {
+		return currency;
 	}
 
 	/** 원화를 표시 통화로 (반올림 전) */
