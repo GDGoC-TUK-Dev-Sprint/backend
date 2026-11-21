@@ -94,6 +94,14 @@ API 명세 25·26에 맞춰 예상 경비 응답 구조를 바꿨어요. 예전 
 - 문장(`basis`, `guidance`, `limitations[].message`, `sources[].name`)은 `Accept-Language`(ko/en)에 맞춰 와요. 화면에 그대로 쓰면 돼요
 - 여행 요약(`trip.budgetPerPerson`)은 아직 원화로 와요. 표시 통화로 바뀐 희망 예산은 `perPerson.budget.amount`를 쓰세요
 
+### 희망 예산 입력 (여행 만들기 `POST /api/trips` · 조건 다시 저장 `PUT /api/trips/{tripId}`)
+
+- `budgetPerPerson`은 이제 KRW·JPY·USD·EUR 모두 보낼 수 있어요. 예전에는 KRW가 아니면 `400` ("지금은 KRW만 받습니다")이었어요
+- 서버는 오늘(서울) 환율로 원화로 바꿔 저장해요. 그래서 나중에 같은 통화로 다시 보면 환율 변동만큼 금액이 조금 달라질 수 있어요
+- 자릿수: KRW·JPY는 정수, USD·EUR는 소수 둘째 자리까지. 넘으면 `400 INVALID_REQUEST` (`budgetPerPerson.amount`)
+- 외화인데 환율 데이터가 없으면 `503 EXCHANGE_RATE_UNAVAILABLE`. KRW는 항상 돼요
+- 응답의 여행 요약 `trip.budgetPerPerson`은 아직 원화로 와요 (trip 담당과 맞춘 뒤 바꿀 예정)
+
 ### `GET /api/trips/{tripId}/cost-estimate` (25)
 
 ```json
@@ -150,4 +158,4 @@ API 명세 25·26에 맞춰 예상 경비 응답 구조를 바꿨어요. 예전 
 | 코드 | 언제 |
 |------|------|
 | `409 ROUTE_NOT_CREATED` | 동선을 만들기 전에 예상 경비를 부르거나 확정할 때 |
-| `503 EXCHANGE_RATE_UNAVAILABLE` | 외화로 요청했는데 환율 데이터가 없을 때. KRW로 다시 부르면 돼요 |
+| `503 EXCHANGE_RATE_UNAVAILABLE` | 외화로 요청했는데 환율 데이터가 없을 때 (예상 경비, 외화 희망 예산을 넣은 여행 만들기·조건 저장). KRW로 다시 부르면 돼요 |
