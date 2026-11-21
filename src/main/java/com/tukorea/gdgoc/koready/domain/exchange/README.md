@@ -7,7 +7,7 @@
 
 1. **수집**: 평일 11:30·16:30(서울)에 그날 고시 환율(매매기준율)을 받아 `exchange_rates`에 저장한다. 같은 날을 다시 받으면 값을 갱신한다
 2. **시작 시 채우기**: 서버를 켤 때 최근 7일 중 비어 있는 날을 채운다. 별도 스레드에서 돌아서 서버 시작을 붙잡지 않는다
-3. **환산**: 오늘(서울) 이전 가장 최근 고시 환율을 쓴다. 주말·공휴일·고시 전(오전 11시쥔 전)에는 직전 영업일 값이다
+3. **환산**: 오늘(서울) 이전 가장 최근 고시 환율을 쓴다. 주말·공휴일·고시 전(오전 11시 전)에는 직전 영업일 값이다
 4. **표시 통화**: 요청 헤더 `X-Currency`(KRW·JPY·USD·EUR)로 받는다. 없으면 `KRW`, 다른 값이면 `400 INVALID_REQUEST` (API 명세 공통 규칙). 예상 경비 API(`GET /api/trips/{tripId}/cost-estimate`)가 금액을 그 통화로 바꿔 준다
 
 수집이나 저장에 실패해도 서버는 계속 돌고 로그만 남는다. 마지막으로 저장한 환율로 계속 환산한다.
@@ -58,10 +58,10 @@ domain/exchange/
 ├── entity/ExchangeRate.java         # 고시일 × 통화 1행, 1단위당 원화
 ├── repository/ExchangeRateRepository.java
 ├── service/ExchangeRateCollector.java   # 수집·시작 시 채우기
-└── service/ExchangeService.java         # krwPerUnit · fromKrw · toKrw
+└── service/ExchangeService.java         # rate · krwPerUnit · fromKrw · toKrw
 ```
 
-예상 경비(`domain/expense/service/ExpenseService`)는 `ExchangeService.krwPerUnit`으로 환율을 받아 `MoneyConverter`로 바꾼다.
+예상 경비(`domain/expense/service/ExpenseService`)는 `ExchangeService.rate`로 환율·고시일을 받아 `MoneyConverter`로 바꾼다.
 표시 통화는 `global/web/DisplayCurrencyArgumentResolver`가 헤더에서 읽어 컨트롤러 파라미터 `DisplayCurrency currency`로 넣는다.
 다른 화면(희망 예산·운임·입장 요금·지출)도 응답은 `fromKrw`, 입력은 `toKrw`를 쓰면 된다.
 
@@ -81,3 +81,73 @@ domain/exchange/
    ```
 
 3. 예상 경비를 헤더 `X-Currency: USD`로 불러 금액이 달러로 오는지 본다. `X-Currency: GBP`면 `400`, `exchange_rates`가 비어 있으면 `503`이 와야 한다
+
+## 프론트엔드 참고 (예상 경비 응답이 바뀌었어요)
+
+API 명세 25·26에 맞춰 예상 경비 응답 구조를 바꿨어요. 예전 필드(`perPerson`이 금액 범위, `budget.perPerson`, `items[].source`, `days[].peak` 등)는 더 이상 오지 않아요.
+
+### 공통
+
+- 표시 통화는 요청 헤더 `X-Currency: KRW|JPY|USD|EUR`로 보내 주세요. 없으면 KRW, 다른 값이면 `400 INVALID_REQUEST`
+- 금액 범위는 모두 `MoneyRange` `{ "min": 12000, "max": 18000, "currency": "KRW" }`. min은 내림·max는 올림해서 KRW 1,000원·JPY 100엔·USD·EUR 1 단위예요
+- 금액 하나(희망 예산)는 `Money` `{ "amount": 300000, "currency": "KRW" }`. USD·EUR는 소수 둘째 자리까지
+- 문장(`basis`, `guidance`, `limitations[].message`, `sources[].name`)은 `Accept-Language`(ko/en)에 맞춰 와요. 화면에 그대로 쓰면 돼요
+- 여행 요약(`trip.budgetPerPerson`)은 아직 원화로 와요. 표시 통화로 바뀐 희망 예산은 `perPerson.budget.amount`를 쓰세요
+
+### `GET /api/trips/{tripId}/cost-estimate` (25)
+
+```json
+{
+  "trip": { "...": "여행 요약 (TripResponse)" },
+  "perPerson": {
+    "amount": { "min": 210000, "max": 260000, "currency": "KRW" },
+    "budget": {
+      "amount": { "amount": 250000, "currency": "KRW" },
+      "status": "MAY_EXCEED",
+      "usagePct": { "min": 84.0, "max": 104.0 },
+      "overBy": { "min": 0, "max": 10000, "currency": "KRW" },
+      "leftOver": { "min": 0, "max": 40000, "currency": "KRW" }
+    },
+    "items": [
+      { "item": "FOOD", "amount": { "min": 90000, "max": 120000, "currency": "KRW" }, "sharePct": 44.7, "basis": "한국관광 데이터랩 ..." }
+    ],
+    "days": [
+      { "dayNumber": 1, "date": "2026-12-01", "amount": { "...": "MoneyRange" }, "items": [ { "item": "FOOD", "amount": { "...": "MoneyRange" } } ], "highest": true }
+    ]
+  },
+  "total": { "...": "perPerson과 같은 구조, 인원 합계 기준" },
+  "guidance": "일정에 따라 희망 예산을 1인 최대 10,000 KRW 넘을 수 있어요. ...",
+  "limitations": [ { "code": "FEE_UNKNOWN", "message": "요금 정보가 없는 장소 2곳은 입장료를 0원으로 계산했어요." } ],
+  "sources": [ { "name": "한국관광 데이터랩 방한 외국인 카드 소비 통계", "detail": "2025-01 ~ 2025-06" } ],
+  "exchangeRate": null
+}
+```
+
+| 필드 | 설명 |
+|------|------|
+| `perPerson` / `total` | 1인 기준 / 인원 합계 기준. 둘 다 오니까 1인·전체 전환(04-03)은 다시 요청하지 않아도 돼요 |
+| `*.budget` | 희망 예산이 없으면 `null`. `total.budget.amount`는 1인 예산 × 인원이에요 |
+| `budget.status` | `WITHIN_BUDGET`(최대도 예산 이하) · `MAY_EXCEED`(최소는 이하, 최대는 초과) · `OVER_BUDGET`(최소도 초과) |
+| `budget.usagePct` | 예산 대비 % (소수 첫째 자리). 비교 막대에 쓰면 돼요. 예산이 0원이면 `null` |
+| `budget.overBy` | 초과액 범위. `WITHIN_BUDGET`이면 `null` |
+| `budget.leftOver` | 남는 금액 범위. `OVER_BUDGET`이면 `null` |
+| `items[]` | 항목 순서 FOOD · SIGHTSEEING · TRANSPORT · SHOPPING · OTHER. `item`은 코드만 오니 화면 이름은 프론트에서 매핑해 주세요. `sharePct`는 범위 가운데값 기준 비중(%) |
+| `days[].highest` | 가장 많이 쓰는 날 (한 날만 `true`) |
+| `guidance` | 예산 조정 안내 (1인 기준). 지금은 상태별 템플릿 문장이고, 희망 예산이 없으면 `null` |
+| `limitations[].code` | `CARD_SPENDING_ONLY`(카드 결제만 집계) · `NO_CARD_STATS`(국적 통계 없음) · `FEE_UNKNOWN`(요금 정보 없는 장소 N곳) · `FARE_UNAVAILABLE`(운임 없는 이동 구간 N곳). 해당될 때만 와요 |
+| `sources[]` | 근거 출처. `detail`은 통계 기간·환율 고시일 (없으면 `null`) |
+| `exchangeRate` | `{ "currency": "USD", "krwPerUnit": 1385.5, "rateDate": "2026-11-20" }`. KRW면 `null`. JPY는 1엔 기준 |
+
+숙박·항공은 들어 있지 않아요.
+
+### `POST /api/trips/{tripId}/confirm` (26)
+
+- 확정하면 여행 요약(`TripResponse`)을 돌려줘요. 이미 확정한 여행이면 **그대로 200** (다시 눌러도 오류가 아니에요)
+- 끝나지 않은 다른 확정 여행이 있으면 `409 ACTIVE_TRIP_EXISTS` (`activeTripId` 포함)
+
+### 오류
+
+| 코드 | 언제 |
+|------|------|
+| `409 ROUTE_NOT_CREATED` | 동선을 만들기 전에 예상 경비를 부르거나 확정할 때 |
+| `503 EXCHANGE_RATE_UNAVAILABLE` | 외화로 요청했는데 환율 데이터가 없을 때. KRW로 다시 부르면 돼요 |
