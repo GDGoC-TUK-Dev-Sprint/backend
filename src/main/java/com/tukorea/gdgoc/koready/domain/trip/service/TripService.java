@@ -286,16 +286,27 @@ public class TripService {
 	private static <E extends Enum<E>> Optional<E> find(Class<E> type, String code) {
 		return Arrays.stream(type.getEnumConstants()).filter(constant -> constant.name().equals(code)).findFirst();
 	}
-	// [expense] 추가: 여행 확정. 동선을 만들기 전이면 409 ROUTE_NOT_CREATED, 이미 확정했으면 409 TRIP_CONFIRMED
+	/**
+	 * [expense] 추가: 여행 확정 (API 명세 26). 새로 확정했으면 true, 이미 확정한 여행이면 아무것도 바꾸지 않고 false (그대로 200).
+	 * 동선을 만들기 전이면 409 ROUTE_NOT_CREATED, 끝나지 않은 다른 확정 여행이 있으면 409 ACTIVE_TRIP_EXISTS (activeTripId).
+	 */
 	@Transactional
-	public Trip confirm(Long userId, Long tripId) {
+	public boolean confirm(Long userId, Long tripId) {
 		lockUser(userId);
 		Trip trip = findMyTrip(userId, tripId);
-		trip.requireEditable();
+		if (!trip.isEditable()) {
+			return false;
+		}
 		if (!trips.hasDays(trip.getId())) {
 			throw new ApiException(ErrorCode.ROUTE_NOT_CREATED);
 		}
+		List<Long> otherActiveTripIds = trips.findActiveTripIds(userId, LocalDate.now(clock)).stream()
+				.filter(id -> !id.equals(trip.getId()))
+				.toList();
+		if (!otherActiveTripIds.isEmpty()) {
+			throw new ApiException(ErrorCode.ACTIVE_TRIP_EXISTS, Map.of("activeTripId", otherActiveTripIds.getFirst()));
+		}
 		trip.confirm(clock.instant());
-		return trip;
+		return true;
 	}
 }
