@@ -1,6 +1,7 @@
 package com.tukorea.gdgoc.koready.domain.exchange.service;
 
 import com.tukorea.gdgoc.koready.domain.exchange.entity.Currency;
+import com.tukorea.gdgoc.koready.domain.exchange.entity.ExchangeRate;
 import com.tukorea.gdgoc.koready.domain.exchange.repository.ExchangeRateRepository;
 import com.tukorea.gdgoc.koready.global.dto.DisplayCurrency;
 import com.tukorea.gdgoc.koready.global.dto.Money;
@@ -31,6 +32,20 @@ public class ExchangeService {
 	private final ExchangeRateRepository rates;
 	private final Clock clock;
 
+	/** 환산에 쓰는 환율: 표시 통화, 1단위당 원화(JPY는 1엔 기준), 고시일 */
+	public record Rate(DisplayCurrency currency, BigDecimal krwPerUnit, LocalDate rateDate) {
+	}
+
+	/** 외화의 오늘 기준 환율 (응답에 기준 환율·고시일을 줄 때). KRW는 환율이 없으므로 부르지 않는다 */
+	@Transactional(readOnly = true)
+	public Rate rate(DisplayCurrency currency) {
+		if (currency == DisplayCurrency.KRW) {
+			throw new IllegalArgumentException("KRW는 환율이 없습니다");
+		}
+		ExchangeRate rate = latest(currency, LocalDate.now(clock));
+		return new Rate(currency, rate.getKrwPerUnit(), rate.getRateDate());
+	}
+
 	/** 표시 통화 1단위당 원화 (오늘 기준, JPY는 1엔 기준). KRW는 1 */
 	@Transactional(readOnly = true)
 	public BigDecimal krwPerUnit(DisplayCurrency currency) {
@@ -43,12 +58,7 @@ public class ExchangeService {
 		if (currency == DisplayCurrency.KRW) {
 			return BigDecimal.ONE;
 		}
-		return rates.findLatest(Currency.valueOf(currency.name()), date, PageRequest.of(0, 1))
-				.stream()
-				.findFirst()
-				.orElseThrow(() -> new ApiException(ErrorCode.EXCHANGE_RATE_UNAVAILABLE,
-						currency + " 환율 데이터가 없어 환산할 수 없습니다"))
-				.getKrwPerUnit();
+		return latest(currency, date).getKrwPerUnit();
 	}
 
 	/**
@@ -69,5 +79,14 @@ public class ExchangeService {
 		int scale = (currency == DisplayCurrency.USD || currency == DisplayCurrency.EUR) ? 2 : 0;
 		BigDecimal amount = BigDecimal.valueOf(krw).divide(krwPerUnit(currency), scale, RoundingMode.HALF_UP);
 		return new Money(amount, currency);
+	}
+
+	/** 그날 이전(당일 포함) 가장 최근 고시 환율. 없으면 503 */
+	private ExchangeRate latest(DisplayCurrency currency, LocalDate date) {
+		return rates.findLatest(Currency.valueOf(currency.name()), date, PageRequest.of(0, 1))
+				.stream()
+				.findFirst()
+				.orElseThrow(() -> new ApiException(ErrorCode.EXCHANGE_RATE_UNAVAILABLE,
+						currency + " 환율 데이터가 없어 환산할 수 없습니다"));
 	}
 }
