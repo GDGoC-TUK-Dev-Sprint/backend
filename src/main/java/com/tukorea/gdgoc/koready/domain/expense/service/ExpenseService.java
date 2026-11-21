@@ -47,16 +47,19 @@ public class ExpenseService {
 	}
 
 	/**
-	 * 이 예산으로 여행 확정하기. 여행을 확정하고(확정한 여행은 편집할 수 없다) 항목별 1인 예상 경비 범위(원화)를 저장한다.
-	 * 계산에 실패하면 확정도 취소된다.
+	 * 이 예산으로 여행 확정하기 (API 명세 26). 여행을 확정하고(확정한 여행은 편집할 수 없다) 항목별 1인 예상 경비 범위(원화)를 저장한다.
+	 * 이미 확정한 여행이면 그대로 200이고 예상 경비도 다시 저장하지 않는다. 계산에 실패하면 확정도 취소된다.
 	 */
 	@Transactional
 	public TripResponse confirm(Long userId, Long tripId, Language language) {
-		Trip trip = tripService.confirm(userId, tripId);
-		CostEstimate estimate = calculator.calculate(trip);
-		for (ExpenseItem item : ExpenseItem.values()) {
-			CostEstimate.Range range = estimate.item(item);
-			costEstimates.save(TripCostEstimate.of(trip, item, range.min(), range.max()));
+		boolean confirmedNow = tripService.confirm(userId, tripId);
+		Trip trip = tripService.findMyTrip(userId, tripId);
+		if (confirmedNow) {
+			CostEstimate estimate = calculator.calculate(trip);
+			for (ExpenseItem item : ExpenseItem.values()) {
+				CostEstimate.Range range = estimate.item(item);
+				costEstimates.save(TripCostEstimate.of(trip, item, range.min(), range.max()));
+			}
 		}
 		return tripService.toResponse(trip, language);
 	}
