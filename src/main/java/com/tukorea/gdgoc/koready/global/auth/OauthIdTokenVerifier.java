@@ -2,6 +2,7 @@ package com.tukorea.gdgoc.koready.global.auth;
 
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.KeySourceException;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.jwk.source.JWKSourceBuilder;
 import com.nimbusds.jose.proc.BadJOSEException;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 앱이 보낸 Google/Apple ID 토큰을 검증한다: 서명(제공자 공개키), 만료, 발급자(iss), 대상(aud).
+ * 검증에 실패하면 {@code 401 INVALID_ID_TOKEN}, 제공자 공개키를 받지 못하면 {@code 502 EXTERNAL_API_FAILED} (API 명세 3).
  */
 @Component
 public class OauthIdTokenVerifier {
@@ -59,11 +61,14 @@ public class OauthIdTokenVerifier {
 					&& audience != null
 					&& audience.stream().anyMatch(rule.audiences()::contains);
 			if (!valid) {
-				throw new ApiException(ErrorCode.UNAUTHORIZED);
+				throw new ApiException(ErrorCode.INVALID_ID_TOKEN);
 			}
 			return new Identity(claims.getSubject(), claims.getStringClaim("name"));
+		} catch (KeySourceException e) {
+			// 제공자 공개키(JWKS)를 받지 못함: 토큰 문제가 아니라 외부 API 실패다
+			throw new ApiException(ErrorCode.EXTERNAL_API_FAILED, provider + " 공개키를 받지 못했습니다", e);
 		} catch (ParseException | BadJOSEException | JOSEException e) {
-			throw new ApiException(ErrorCode.UNAUTHORIZED);
+			throw new ApiException(ErrorCode.INVALID_ID_TOKEN);
 		}
 	}
 
