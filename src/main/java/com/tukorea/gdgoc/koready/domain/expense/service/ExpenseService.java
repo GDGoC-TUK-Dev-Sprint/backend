@@ -59,7 +59,7 @@ public class ExpenseService {
 	 * 이미 확정한 여행이면 그대로 200이고 예상 경비도 다시 저장하지 않는다. 계산에 실패하면 확정도 취소된다.
 	 */
 	@Transactional
-	public TripResponse confirm(Long userId, Long tripId, Language language) {
+	public TripResponse confirm(Long userId, Long tripId, Language language, DisplayCurrency currency) {
 		boolean confirmedNow = tripService.confirm(userId, tripId);
 		Trip trip = tripService.findMyTrip(userId, tripId);
 		if (confirmedNow) {
@@ -69,7 +69,7 @@ public class ExpenseService {
 				costEstimates.save(TripCostEstimate.of(trip, item, range.min(), range.max()));
 			}
 		}
-		return tripService.toResponse(trip, language);
+		return tripService.toResponse(trip, language, currency);
 	}
 
 	private CostEstimateResponse toResponse(Trip trip, CostEstimate estimate, Language language,
@@ -83,7 +83,7 @@ public class ExpenseService {
 		CostEstimateResponse.ExchangeRateInfo exchangeRate = rate == null ? null
 				: new CostEstimateResponse.ExchangeRateInfo(rate.currency(), rate.krwPerUnit(), rate.rateDate());
 		return new CostEstimateResponse(
-				tripService.toResponse(trip, language),
+				tripService.toResponse(trip, language, converter.currency()),
 				perPerson,
 				total,
 				guidance(perPerson.budget(), converter.currency(), language),

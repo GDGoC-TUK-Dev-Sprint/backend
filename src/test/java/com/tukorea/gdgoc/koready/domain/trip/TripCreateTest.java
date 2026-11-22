@@ -257,6 +257,28 @@ class TripCreateTest {
 	}
 
 	@Test
+	void budgetIsShownInRequestedCurrency() {
+		jdbc.update("DELETE FROM exchange_rates WHERE currency = 'USD'");
+		jdbc.update("""
+				INSERT INTO exchange_rates (rate_date, currency, krw_per_unit, fetched_at)
+				VALUES ('2026-10-30', 'USD', 1400.0000, now())
+				""");
+
+		assertThat(mvc.post().uri("/api/trips")
+				.header("X-Dev-User-Id", userId)
+				.header("X-Currency", "USD")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(areaTrip("2026-11-10", "2026-11-12").replace("\"partySize\": 2",
+						"\"partySize\": 2, \"budgetPerPerson\": {\"amount\": 100.5, \"currency\": \"USD\"}"))
+				.exchange())
+				.hasStatus(HttpStatus.CREATED)
+				.bodyJson()
+				.isLenientlyEqualTo("""
+						{"budgetPerPerson": {"amount": 100.50, "currency": "USD"}}
+						""");
+	}
+
+	@Test
 	void foreignBudgetNeedsExchangeRate() {
 		jdbc.update("DELETE FROM exchange_rates");
 

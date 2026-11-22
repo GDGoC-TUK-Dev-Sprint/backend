@@ -20,6 +20,7 @@ import com.tukorea.gdgoc.koready.domain.trip.entity.TripConditions;
 import com.tukorea.gdgoc.koready.domain.trip.repository.TripRepository;
 import com.tukorea.gdgoc.koready.domain.user.entity.User;
 import com.tukorea.gdgoc.koready.global.dto.Code;
+import com.tukorea.gdgoc.koready.global.dto.DisplayCurrency;
 import com.tukorea.gdgoc.koready.global.dto.LatLng;
 import com.tukorea.gdgoc.koready.global.dto.Money;
 import com.tukorea.gdgoc.koready.global.exception.ApiException;
@@ -70,7 +71,7 @@ public class TripService {
 	 * 같은 사용자의 요청이 겹치지 않게 사용자 행을 잠근다.
 	 */
 	@Transactional
-	public TripResponse create(Long userId, TripRequest request, Language language) {
+	public TripResponse create(Long userId, TripRequest request, Language language, DisplayCurrency currency) {
 		LocalDate today = LocalDate.now(clock);
 		TripConditions conditions = conditions(request, today);
 		User user = lockUser(userId);
@@ -80,7 +81,7 @@ public class TripService {
 		}
 		trips.deleteDrafts(userId);
 		Trip trip = trips.save(Trip.create(user, conditions));
-		return toResponse(trip, language);
+		return toResponse(trip, language, currency);
 	}
 
 	/**
@@ -89,7 +90,8 @@ public class TripService {
 	 * 여행이 없거나(404) 확정했으면(409) 요청 값을 보기 전에 거절한다.
 	 */
 	@Transactional
-	public TripResponse update(Long userId, Long tripId, TripRequest request, Language language) {
+	public TripResponse update(Long userId, Long tripId, TripRequest request, Language language,
+			DisplayCurrency currency) {
 		lockUser(userId);
 		Trip trip = findMyTrip(userId, tripId);
 		trip.requireEditable();
@@ -97,13 +99,13 @@ public class TripService {
 		if (trip.changeConditions(conditions)) {
 			trips.deleteDays(trip.getId());
 		}
-		return toResponse(trip, language);
+		return toResponse(trip, language, currency);
 	}
 
 	/** 내 여행의 요약 */
 	@Transactional(readOnly = true)
-	public TripResponse get(Long userId, Long tripId, Language language) {
-		return toResponse(findMyTrip(userId, tripId), language);
+	public TripResponse get(Long userId, Long tripId, Language language, DisplayCurrency currency) {
+		return toResponse(findMyTrip(userId, tripId), language, currency);
 	}
 
 	/**
@@ -117,8 +119,11 @@ public class TripService {
 				.orElseThrow(() -> new ApiException(ErrorCode.TRIP_NOT_FOUND));
 	}
 
-	/** 여행 요약. 숙소·카테고리를 지연 로딩하므로 트랜잭션 안에서 부른다. 희망 예산은 원화로 준다 (환율 환산 전) */
-	public TripResponse toResponse(Trip trip, Language language) {
+	/**
+	 * 여행 요약. 숙소·카테고리를 지연 로딩하므로 트랜잭션 안에서 부른다. 희망 예산은 표시 통화로 환산해 준다
+	 * (외화인데 환율이 없으면 {@code 503 EXCHANGE_RATE_UNAVAILABLE}).
+	 */
+	public TripResponse toResponse(Trip trip, Language language, DisplayCurrency currency) {
 		Integer budget = trip.getBudgetPerPersonKrw();
 		return new TripResponse(
 				trip.getId(),
@@ -133,7 +138,7 @@ public class TripService {
 				trip.getDays() - 1,
 				trip.getDays(),
 				trip.getPartySize(),
-				budget == null ? null : Money.krw(budget),
+				budget == null ? null : exchangeService.fromKrw(budget, currency),
 				categories(trip, language),
 				stay(trip, language),
 				trips.hasDays(trip.getId()),

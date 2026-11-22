@@ -29,7 +29,8 @@ class ExpenseController {
 
 	/** 04-08 이 예산으로 여행 확정하기 → 01 메인. 확정한 여행은 편집할 수 없다 */
 	@PostMapping("/api/trips/{tripId}/confirm")
-	TripResponse confirm(@LoginUserId Long userId, @PathVariable Long tripId, Language language) {
-		return expenseService.confirm(userId, tripId, language);
+	TripResponse confirm(@LoginUserId Long userId, @PathVariable Long tripId, Language language,
+			DisplayCurrency currency) {
+		return expenseService.confirm(userId, tripId, language, currency);
 	}
 }

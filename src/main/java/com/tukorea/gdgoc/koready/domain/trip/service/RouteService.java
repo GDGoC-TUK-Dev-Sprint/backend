@@ -11,6 +11,7 @@ import com.tukorea.gdgoc.koready.domain.trip.entity.TripDay;
 import com.tukorea.gdgoc.koready.domain.trip.entity.TripItemOrigin;
 import com.tukorea.gdgoc.koready.domain.trip.repository.TripDayRepository;
 import com.tukorea.gdgoc.koready.domain.trip.repository.TripRepository;
+import com.tukorea.gdgoc.koready.global.dto.DisplayCurrency;
 import com.tukorea.gdgoc.koready.global.dto.LatLng;
 import com.tukorea.gdgoc.koready.global.exception.ApiException;
 import com.tukorea.gdgoc.koready.global.exception.ErrorCode;
@@ -54,7 +55,8 @@ public class RouteService {
 	 * (자동으로 채운 장소는 못 넣어도 알리지 않는다).
 	 */
 	@Transactional
-	public RouteResponse create(Long userId, Long tripId, List<Long> placeIds, Language language) {
+	public RouteResponse create(Long userId, Long tripId, List<Long> placeIds, Language language,
+			DisplayCurrency currency) {
 		tripService.lockUser(userId);
 		Trip trip = tripService.findMyTrip(userId, tripId);
 		trip.requireEditable();
@@ -108,7 +110,7 @@ public class RouteService {
 			Place place = placesById.get(entry.getKey());
 			unscheduled.add(new RouteResponse.Unscheduled(TripDayAssembler.placeSummary(place, language), entry.getValue()));
 		}
-		return new RouteResponse(tripService.toResponse(trip, language), dayResponses, unscheduled);
+		return new RouteResponse(tripService.toResponse(trip, language, currency), dayResponses, unscheduled);
 	}
 
 	/**
