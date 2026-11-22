@@ -17,5 +17,6 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, Long
 
 	Optional<ExchangeRate> findByRateDateAndCurrency(LocalDate rateDate, Currency currency);
 
-	boolean existsByRateDate(LocalDate rateDate);
+	/** 그 고시일에 저장된 통화 수 (시작 시 채우기에서 빠진 통화가 있는지 본다) */
+	long countByRateDate(LocalDate rateDate);
 }

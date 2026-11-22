@@ -6,7 +6,7 @@
 ## 동작
 
 1. **수집**: 평일 11:30·16:30(서울)에 그날 고시 환율(매매기준율)을 받아 `exchange_rates`에 저장한다. 같은 날을 다시 받으면 값을 갱신한다
-2. **시작 시 채우기**: 서버를 켤 때 최근 7일 중 비어 있는 날을 채운다. 별도 스레드에서 돌아서 서버 시작을 붙잡지 않는다
+2. **시작 시 채우기**: 서버를 켤 때 최근 7일 중 통화가 다 차지 않은 날(한 통화만 빠진 날 포함)을 채운다. 별도 스레드에서 돌아서 서버 시작을 붙잡지 않는다
 3. **환산**: 오늘(서울) 이전 가장 최근 고시 환율을 쓴다. 주말·공휴일·고시 전(오전 11시 전)에는 직전 영업일 값이다
 4. **표시 통화**: 요청 헤더 `X-Currency`(KRW·JPY·USD·EUR)로 받는다. 없으면 `KRW`, 다른 값이면 `400 INVALID_REQUEST` (API 명세 공통 규칙). 예상 경비 API(`GET /api/trips/{tripId}/cost-estimate`)가 금액을 그 통화로 바꿔 준다
 
@@ -92,7 +92,7 @@ API 명세 25·26에 맞춰 예상 경비 응답 구조를 바꿨어요. 예전 
 - 금액 범위는 모두 `MoneyRange` `{ "min": 12000, "max": 18000, "currency": "KRW" }`. min은 내림·max는 올림해서 KRW 1,000원·JPY 100엔·USD·EUR 1 단위예요
 - 금액 하나(희망 예산)는 `Money` `{ "amount": 300000, "currency": "KRW" }`. USD·EUR는 소수 둘째 자리까지
 - 문장(`basis`, `guidance`, `limitations[].message`, `sources[].name`)은 `Accept-Language`(ko/en)에 맞춰 와요. 화면에 그대로 쓰면 돼요
-- 여행 요약(`trip.budgetPerPerson`)은 아직 원화로 와요. 표시 통화로 바뀐 희망 예산은 `perPerson.budget.amount`를 쓰세요
+- 여행 요약(`trip.budgetPerPerson`)도 `X-Currency`로 환산해서 와요 (여행 만들기·조회·조건 다시 저장·동선 만들기·확정·예상 경비 응답 모두). KRW·JPY는 정수, USD·EUR는 소수 둘째 자리로 반올림
 
 ### 희망 예산 입력 (여행 만들기 `POST /api/trips` · 조건 다시 저장 `PUT /api/trips/{tripId}`)
 
@@ -100,7 +100,7 @@ API 명세 25·26에 맞춰 예상 경비 응답 구조를 바꿨어요. 예전 
 - 서버는 오늘(서울) 환율로 원화로 바꿔 저장해요. 그래서 나중에 같은 통화로 다시 보면 환율 변동만큼 금액이 조금 달라질 수 있어요
 - 자릿수: KRW·JPY는 정수, USD·EUR는 소수 둘째 자리까지. 넘으면 `400 INVALID_REQUEST` (`budgetPerPerson.amount`)
 - 외화인데 환율 데이터가 없으면 `503 EXCHANGE_RATE_UNAVAILABLE`. KRW는 항상 돼요
-- 응답의 여행 요약 `trip.budgetPerPerson`은 아직 원화로 와요 (trip 담당과 맞춘 뒤 바꿀 예정)
+- 응답의 여행 요약 `trip.budgetPerPerson`은 `X-Currency`로 환산해서 와요. 외화로 보면서 환율 데이터가 없으면 이 API들도 `503 EXCHANGE_RATE_UNAVAILABLE`
 
 ### `GET /api/trips/{tripId}/cost-estimate` (25)
 

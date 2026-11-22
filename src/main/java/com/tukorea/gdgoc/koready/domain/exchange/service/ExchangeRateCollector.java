@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
  * 한국수출입은행 환율을 받아 {@code exchange_rates}에 저장한다.
  * <ul>
  *   <li>매일 정해진 시각({@code koready.exchange.collect-cron})에 오늘 환율을 받는다</li>
- *   <li>서버를 켤 때 최근 {@code backfill-days}일 중 비어 있는 날을 채운다 (주말·공휴일은 받아도 비어 있다).
+ *   <li>서버를 켤 때 최근 {@code backfill-days}일 중 통화가 다 차지 않은 날을 채운다 (주말·공휴일은 받아도 비어 있다).
  *       서버 시작을 붙잡지 않게 따로 돈다</li>
  * </ul>
  * 인증키가 없으면 아무것도 하지 않는다 (테스트·로컬). 수집·저장에 실패해도 예외를 밖으로 내지 않고 로그만 남긴다
@@ -53,13 +53,13 @@ public class ExchangeRateCollector {
 		Thread.ofVirtual().name("exchange-rate-backfill").start(this::backfillRecentDays);
 	}
 
-	/** 오늘부터 거슬러 올라가 비어 있는 날을 채운다 */
+	/** 오늘부터 거슬러 올라가 통화가 다 차지 않은 날을 채운다 (한 통화만 빠진 날도 다시 받는다) */
 	void backfillRecentDays() {
 		LocalDate today = LocalDate.now(clock);
 		for (int daysAgo = properties.backfillDays() - 1; daysAgo >= 0; daysAgo--) {
 			LocalDate date = today.minusDays(daysAgo);
 			try {
-				if (!rates.existsByRateDate(date)) {
+				if (rates.countByRateDate(date) < Currency.values().length) {
 					collect(date);
 				}
 			} catch (RuntimeException e) {
@@ -68,8 +68,11 @@ public class ExchangeRateCollector {
 		}
 	}
 
-	/** 그 고시일의 환율을 받아 저장(이미 있으면 갱신)하고, 저장한 통화 수를 돌려준다. 실패하면 그때까지 저장한 수 */
-	public int collect(LocalDate date) {
+	/**
+	 * 그 고시일의 환율을 받아 저장(이미 있으면 갱신)하고, 저장한 통화 수를 돌려준다. 저장에 실패한 통화는 건너뛰고 나머지를 저장한다.
+	 * 시작 시 채우기 스레드와 스케줄이 같은 날을 동시에 넣지 않게 한 번에 하나만 돈다.
+	 */
+	public synchronized int collect(LocalDate date) {
 		if (!client.isConfigured()) {
 			return 0;
 		}
@@ -77,17 +80,17 @@ public class ExchangeRateCollector {
 		try {
 			fetched = client.fetchRates(date);
 		} catch (RuntimeException e) {
-			log.warn("{} 환율 수집 실패: {}", date, e.getMessage(), e);
+			log.warn("{} 환율 수집 실패: {}", date, e.getMessage());
 			return 0;
 		}
 		Instant now = clock.instant();
 		int saved = 0;
-		try {
-			for (Currency currency : Currency.values()) {
-				BigDecimal krwPerUnit = fetched.get(currency.name());
-				if (krwPerUnit == null) {
-					continue;
-				}
+		for (Currency currency : Currency.values()) {
+			BigDecimal krwPerUnit = fetched.get(currency.name());
+			if (krwPerUnit == null) {
+				continue;
+			}
+			try {
 				ExchangeRate rate = rates.findByRateDateAndCurrency(date, currency)
 						.map(existing -> {
 							existing.update(krwPerUnit, now);
@@ -96,9 +99,9 @@ public class ExchangeRateCollector {
 						.orElseGet(() -> ExchangeRate.of(date, currency, krwPerUnit, now));
 				rates.save(rate);
 				saved++;
+			} catch (RuntimeException e) {
+				log.warn("{} {} 환율 저장 실패: {}", date, currency, e.getMessage(), e);
 			}
-		} catch (RuntimeException e) {
-			log.warn("{} 환율 저장 실패: {}", date, e.getMessage(), e);
 		}
 		if (saved > 0) {
 			log.info("{} 환율 {}개 저장", date, saved);
