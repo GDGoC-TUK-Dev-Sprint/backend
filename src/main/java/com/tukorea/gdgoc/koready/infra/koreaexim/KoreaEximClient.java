@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -84,9 +85,16 @@ public class KoreaEximClient {
 			return rates;
 		} catch (ApiException e) {
 			throw e;
+		} catch (RestClientResponseException e) {
+			throw failed("HTTP " + e.getStatusCode().value());
 		} catch (RuntimeException e) {
-			throw new ApiException(ErrorCode.EXTERNAL_API_FAILED, "한국수출입은행 환율 호출에 실패했습니다", e);
+			// 원인 예외는 넘기지 않는다: 연결 실패 메시지에 인증키가 든 요청 URL이 들어 있다
+			throw failed(e.getClass().getSimpleName());
 		}
+	}
+
+	private static ApiException failed(String reason) {
+		return new ApiException(ErrorCode.EXTERNAL_API_FAILED, "한국수출입은행 환율 호출에 실패했습니다: " + reason);
 	}
 
 	/** {@code USD}, {@code JPY(100)}처럼 온 통화 단위와 매매기준율을 1단위당 원화로. 읽지 못한 값은 null */
