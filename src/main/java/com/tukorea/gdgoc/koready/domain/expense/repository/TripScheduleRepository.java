@@ -1,6 +1,7 @@
 package com.tukorea.gdgoc.koready.domain.expense.repository;
 
 import com.tukorea.gdgoc.koready.domain.place.entity.FeeAudience;
+import com.tukorea.gdgoc.koready.domain.place.entity.FeeType;
 import com.tukorea.gdgoc.koready.domain.trip.entity.MealType;
 import com.tukorea.gdgoc.koready.domain.trip.entity.TripDay;
 import java.util.Collection;
@@ -20,8 +21,8 @@ public interface TripScheduleRepository extends Repository<TripDay, Long> {
 	@Query("select l.tripDay.id as dayId, l.fareKrw as fareKrw from Leg l where l.tripDay.trip.id = :tripId")
 	List<LegFare> findLegFares(Long tripId);
 
-	/** 여행의 모든 일정 항목 (식사 자리면 mealType이 있다) */
-	@Query("select i.tripDay.id as dayId, i.mealType as mealType, i.place.id as placeId "
+	/** 여행의 모든 일정 항목 (식사 자리면 mealType이 있다). feeType은 장소의 요금 유형 */
+	@Query("select i.tripDay.id as dayId, i.mealType as mealType, i.place.id as placeId, i.place.feeType as feeType "
 			+ "from TripItem i where i.tripDay.trip.id = :tripId")
 	List<ItemRef> findItems(Long tripId);
 
@@ -41,6 +42,8 @@ public interface TripScheduleRepository extends Repository<TripDay, Long> {
 		MealType getMealType();
 
 		Long getPlaceId();
+
+		FeeType getFeeType();
 	}
 
 	interface FeeRow {

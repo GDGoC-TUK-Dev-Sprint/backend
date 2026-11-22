@@ -6,6 +6,7 @@ import com.tukorea.gdgoc.koready.domain.expense.entity.ExpenseItem;
 import com.tukorea.gdgoc.koready.domain.expense.repository.CostStatsRepository;
 import com.tukorea.gdgoc.koready.domain.expense.repository.TripScheduleRepository;
 import com.tukorea.gdgoc.koready.domain.place.entity.FeeAudience;
+import com.tukorea.gdgoc.koready.domain.place.entity.FeeType;
 import com.tukorea.gdgoc.koready.domain.trip.entity.Trip;
 import com.tukorea.gdgoc.koready.domain.trip.entity.TripDay;
 import com.tukorea.gdgoc.koready.global.exception.ApiException;
@@ -17,7 +18,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -147,7 +147,7 @@ class CostCalculator {
 		return sums;
 	}
 
-	/** 일자별 입장료 범위와 요금 정보가 없는 장소 수 */
+	/** 일자별 입장료 범위와 성인 요금을 모르는 장소 수 (무료 장소 제외) */
 	private record Fees(Map<Long, CostEstimate.Range> byDay, int unknownPlaces) {
 	}
 
@@ -160,10 +160,13 @@ class CostCalculator {
 			return new Fees(Map.of(), 0);
 		}
 		Set<Long> placeIds = items.stream().map(TripScheduleRepository.ItemRef::getPlaceId).collect(Collectors.toSet());
-		Set<Long> placesWithFeeInfo = new HashSet<>();
+		// 무료 장소는 요금 행이 없어도 0원이 맞으므로 요금 정보 없음에 세지 않는다
+		Set<Long> freePlaces = items.stream()
+				.filter(item -> item.getFeeType() == FeeType.FREE)
+				.map(TripScheduleRepository.ItemRef::getPlaceId)
+				.collect(Collectors.toSet());
 		Map<Long, List<Integer>> adultAmounts = new HashMap<>();
 		for (TripScheduleRepository.FeeRow fee : schedule.findFees(placeIds)) {
-			placesWithFeeInfo.add(fee.getPlaceId());
 			if (fee.getAudience() == FeeAudience.ADULT) {
 				adultAmounts.computeIfAbsent(fee.getPlaceId(), id -> new ArrayList<>()).add(fee.getAmountKrw());
 			}
@@ -178,7 +181,10 @@ class CostCalculator {
 			byDay.merge(item.getDayId(), feeByPlace.getOrDefault(item.getPlaceId(), CostEstimate.Range.ZERO),
 					CostEstimate.Range::plus);
 		}
-		int unknownPlaces = (int) placeIds.stream().filter(id -> !placesWithFeeInfo.contains(id)).count();
+		// 성인 요금을 모르는 유료·상이·미상 장소 (0원으로 계산했다)
+		int unknownPlaces = (int) placeIds.stream()
+				.filter(id -> !freePlaces.contains(id) && !feeByPlace.containsKey(id))
+				.count();
 		return new Fees(byDay, unknownPlaces);
 	}
 }

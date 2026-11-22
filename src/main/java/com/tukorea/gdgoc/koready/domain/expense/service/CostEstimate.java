@@ -9,7 +9,7 @@ import java.util.Map;
  * 계산한 예상 경비 (원화, 1인 기준). 일자별 항목별 범위를 갖고 있고 합계는 여기서 더한다.
  *
  * @param statMonths 카드 소비 통계에서 쓴 달 (오름차순, 근거 출처의 기간). 통계가 없으면 빈 목록
- * @param feeUnknownPlaces 요금 정보가 하나도 없는 일정 장소 수 (데이터 한계 FEE_UNKNOWN)
+ * @param feeUnknownPlaces 성인 요금을 몰라 0원으로 계산한 일정 장소 수. 무료 장소는 세지 않는다 (데이터 한계 FEE_UNKNOWN)
  * @param fareUnavailableLegs 운임을 받지 못한 이동 구간 수 (데이터 한계 FARE_UNAVAILABLE)
  */
 record CostEstimate(List<Day> days, Map<ExpenseItem, Source> sources, List<String> statMonths,
