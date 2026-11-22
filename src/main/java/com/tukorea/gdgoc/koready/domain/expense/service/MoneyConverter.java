@@ -4,22 +4,24 @@ import com.tukorea.gdgoc.koready.domain.expense.dto.MoneyRange;
 import com.tukorea.gdgoc.koready.global.dto.DisplayCurrency;
 import com.tukorea.gdgoc.koready.global.dto.Money;
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.math.RoundingMode;
 
 /**
- * 원화 금액을 표시 통화로 바꾼다. 범위는 최소를 내림, 최대를 올림해서 실제 범위를 벗어나지 않게 한다.
- * 소수 자리는 원·엔 0자리, 달러·유로 2자리.
+ * 원화 금액을 표시 통화로 바꾼다 (API 명세 공통 규칙 "통화").
+ * <ul>
+ *   <li>금액 하나: KRW·JPY는 정수, USD·EUR는 소수 둘째 자리로 반올림</li>
+ *   <li>범위: min은 내림·max는 올림해 KRW 1,000원·JPY 100엔·USD·EUR 1 단위로 맞춘다 (실제 범위를 벗어나지 않게)</li>
+ * </ul>
  */
 final class MoneyConverter {
 
 	private final DisplayCurrency currency;
 	private final BigDecimal krwPerUnit;
-	private final int scale;
 
 	private MoneyConverter(DisplayCurrency currency, BigDecimal krwPerUnit) {
 		this.currency = currency;
 		this.krwPerUnit = krwPerUnit;
-		this.scale = (currency == DisplayCurrency.USD || currency == DisplayCurrency.EUR) ? 2 : 0;
 	}
 
 	static MoneyConverter krw() {
@@ -32,18 +34,42 @@ final class MoneyConverter {
 	}
 
 	MoneyRange range(CostEstimate.Range range) {
-		return new MoneyRange(convert(range.min(), RoundingMode.DOWN), convert(range.max(), RoundingMode.UP));
+		return range(range.min(), range.max());
+	}
+
+	/** 원화 범위 (인원 합계·예산 차이처럼 int를 넘을 수 있는 값) */
+	MoneyRange range(long minKrw, long maxKrw) {
+		return new MoneyRange(
+				roundToRangeUnit(toDisplay(minKrw), RoundingMode.FLOOR),
+				roundToRangeUnit(toDisplay(maxKrw), RoundingMode.CEILING),
+				currency);
 	}
 
 	/** 단일 금액 (희망 예산 등). 반올림 */
 	Money amount(long krw) {
-		return convert(krw, RoundingMode.HALF_UP);
-	}
-
-	private Money convert(long krw, RoundingMode mode) {
 		if (currency == DisplayCurrency.KRW) {
 			return Money.krw(krw);
 		}
-		return new Money(BigDecimal.valueOf(krw).divide(krwPerUnit, scale, mode), currency);
+		return new Money(toDisplay(krw).setScale(currency.fractionDigits(), RoundingMode.HALF_UP), currency);
+	}
+
+	DisplayCurrency currency() {
+		return currency;
+	}
+
+	/** 원화를 표시 통화로 (반올림 전) */
+	private BigDecimal toDisplay(long krw) {
+		BigDecimal value = BigDecimal.valueOf(krw);
+		return currency == DisplayCurrency.KRW ? value : value.divide(krwPerUnit, MathContext.DECIMAL64);
+	}
+
+	/** 범위를 맞추는 단위 배수로 내림·올림 */
+	private BigDecimal roundToRangeUnit(BigDecimal value, RoundingMode mode) {
+		BigDecimal unit = BigDecimal.valueOf(switch (currency) {
+			case KRW -> 1_000;
+			case JPY -> 100;
+			case USD, EUR -> 1;
+		});
+		return value.divide(unit, 0, mode).multiply(unit);
 	}
 }

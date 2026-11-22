@@ -4,6 +4,7 @@ import com.tukorea.gdgoc.koready.domain.trip.dto.TripRequest;
 import com.tukorea.gdgoc.koready.domain.trip.dto.TripResponse;
 import com.tukorea.gdgoc.koready.domain.trip.service.TripService;
 import com.tukorea.gdgoc.koready.global.auth.LoginUserId;
+import com.tukorea.gdgoc.koready.global.dto.DisplayCurrency;
 import com.tukorea.gdgoc.koready.global.web.Language;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,20 +26,22 @@ class TripController {
 	/** 여행 만들기: 조건 입력의 "이 조건으로 여행 계획 생성하기" */
 	@PostMapping("/api/trips")
 	@ResponseStatus(HttpStatus.CREATED)
-	TripResponse create(@LoginUserId Long userId, @Valid @RequestBody TripRequest request, Language language) {
-		return tripService.create(userId, request, language);
+	TripResponse create(@LoginUserId Long userId, @Valid @RequestBody TripRequest request, Language language,
+			DisplayCurrency currency) {
+		return tripService.create(userId, request, language, currency);
 	}
 
 	/** 여행 요약: 장소 선택의 조건 요약, 일자별 동선·지도·계획 확인의 여행 정보 */
 	@GetMapping("/api/trips/{tripId}")
-	TripResponse get(@LoginUserId Long userId, @PathVariable Long tripId, Language language) {
-		return tripService.get(userId, tripId, language);
+	TripResponse get(@LoginUserId Long userId, @PathVariable Long tripId, Language language,
+			DisplayCurrency currency) {
+		return tripService.get(userId, tripId, language, currency);
 	}
 
 	/** 조건 다시 저장: 장소 선택의 조건 요약 "변경"으로 조건 입력에 돌아가 다시 "이 조건으로 여행 계획 생성하기" */
 	@PutMapping("/api/trips/{tripId}")
 	TripResponse update(@LoginUserId Long userId, @PathVariable Long tripId, @Valid @RequestBody TripRequest request,
-			Language language) {
-		return tripService.update(userId, tripId, request, language);
+			Language language, DisplayCurrency currency) {
+		return tripService.update(userId, tripId, request, language, currency);
 	}
 }

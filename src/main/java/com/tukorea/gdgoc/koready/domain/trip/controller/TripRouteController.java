@@ -4,6 +4,7 @@ import com.tukorea.gdgoc.koready.domain.trip.dto.RouteRequest;
 import com.tukorea.gdgoc.koready.domain.trip.dto.RouteResponse;
 import com.tukorea.gdgoc.koready.domain.trip.service.RouteService;
 import com.tukorea.gdgoc.koready.global.auth.LoginUserId;
+import com.tukorea.gdgoc.koready.global.dto.DisplayCurrency;
 import com.tukorea.gdgoc.koready.global.web.Language;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +25,7 @@ class TripRouteController {
 	@PostMapping("/api/trips/{tripId}/route")
 	@ResponseStatus(HttpStatus.CREATED)
 	RouteResponse create(@LoginUserId Long userId, @PathVariable Long tripId, @Valid @RequestBody RouteRequest request,
-			Language language) {
-		return routeService.create(userId, tripId, request.placeIds(), language);
+			Language language, DisplayCurrency currency) {
+		return routeService.create(userId, tripId, request.placeIds(), language, currency);
 	}
 }

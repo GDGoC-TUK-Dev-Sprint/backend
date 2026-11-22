@@ -1,6 +1,7 @@
 package com.tukorea.gdgoc.koready.global.config;
 
 import com.tukorea.gdgoc.koready.global.auth.LoginUserIdArgumentResolver;
+import com.tukorea.gdgoc.koready.global.web.DisplayCurrencyArgumentResolver;
 import com.tukorea.gdgoc.koready.global.web.LanguageArgumentResolver;
 import java.util.List;
 import org.springframework.context.annotation.Configuration;
@@ -14,5 +15,6 @@ class WebConfig implements WebMvcConfigurer {
 	public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
 		resolvers.add(new LoginUserIdArgumentResolver());
 		resolvers.add(new LanguageArgumentResolver());
+		resolvers.add(new DisplayCurrencyArgumentResolver());
 	}
 }
