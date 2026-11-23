@@ -190,7 +190,7 @@ class TripUpdateTest {
 						  {"field": "startDate", "reason": "오늘(서울) 이후여야 합니다"},
 						  {"field": "endDate", "reason": "여행은 최대 10일입니다"},
 						  {"field": "partySize", "reason": "1~10명이어야 합니다"},
-						  {"field": "stay.type", "reason": "지도 핀(PIN)은 아직 받지 않습니다"}]}
+						  {"field": "stay.location", "reason": "PIN이면 필수입니다"}]}
 						""");
 		assertThat(put("""
 				{"stay": {}}

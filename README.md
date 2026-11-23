@@ -73,6 +73,16 @@ docker compose exec db psql -U koready -d koready -c "INSERT INTO users (name, c
 ./gradlew test
 ```
 
+### Docker 이미지
+
+이미지는 미리 만든 jar만 담는다. 컨테이너에서 PC의 로컬 DB에 붙을 때는 `DB_HOST=host.docker.internal`을 준다. 헬스 체크는 `/actuator/health`다.
+
+```bash
+./gradlew bootJar
+docker build -t koready-api .
+docker run --rm -p 127.0.0.1:8080:8080 -e DB_HOST=host.docker.internal -e DB_PASSWORD koready-api
+```
+
 ## 프로젝트 구조
 
 ```

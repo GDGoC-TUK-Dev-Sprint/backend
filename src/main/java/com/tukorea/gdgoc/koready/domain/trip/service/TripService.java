@@ -1,5 +1,8 @@
 package com.tukorea.gdgoc.koready.domain.trip.service;
 
+import com.tukorea.gdgoc.koready.domain.exchange.service.ExchangeService;
+import com.tukorea.gdgoc.koready.domain.geo.dto.GeoReverseResponse;
+import com.tukorea.gdgoc.koready.domain.geo.service.GeoService;
 import com.tukorea.gdgoc.koready.domain.meta.entity.Area;
 import com.tukorea.gdgoc.koready.domain.meta.entity.Category;
 import com.tukorea.gdgoc.koready.domain.meta.entity.Nationality;
@@ -57,16 +60,18 @@ public class TripService {
 	private final TripRepository trips;
 	private final PlaceRepository places;
 	private final PlaceClassRepository placeClasses;
+	private final GeoService geoService;
 	private final TripProperties properties;
 	private final EntityManager entityManager;
 	private final Clock clock;
+	private final ExchangeService exchangeService;
 
 	/**
 	 * 여행을 만든다. 끝나지 않은 확정 여행이 있으면 거절하고, 남아 있던 확정 전 여행은 지운다.
 	 * 같은 사용자의 요청이 겹치지 않게 사용자 행을 잠근다.
 	 */
 	@Transactional
-	public TripResponse create(Long userId, TripRequest request, Language language) {
+	public TripResponse create(Long userId, TripRequest request, Language language, DisplayCurrency currency) {
 		LocalDate today = LocalDate.now(clock);
 		TripConditions conditions = conditions(request, today);
 		User user = lockUser(userId);
@@ -76,7 +81,7 @@ public class TripService {
 		}
 		trips.deleteDrafts(userId);
 		Trip trip = trips.save(Trip.create(user, conditions));
-		return toResponse(trip, language);
+		return toResponse(trip, language, currency);
 	}
 
 	/**
@@ -85,7 +90,8 @@ public class TripService {
 	 * 여행이 없거나(404) 확정했으면(409) 요청 값을 보기 전에 거절한다.
 	 */
 	@Transactional
-	public TripResponse update(Long userId, Long tripId, TripRequest request, Language language) {
+	public TripResponse update(Long userId, Long tripId, TripRequest request, Language language,
+			DisplayCurrency currency) {
 		lockUser(userId);
 		Trip trip = findMyTrip(userId, tripId);
 		trip.requireEditable();
@@ -93,13 +99,13 @@ public class TripService {
 		if (trip.changeConditions(conditions)) {
 			trips.deleteDays(trip.getId());
 		}
-		return toResponse(trip, language);
+		return toResponse(trip, language, currency);
 	}
 
 	/** 내 여행의 요약 */
 	@Transactional(readOnly = true)
-	public TripResponse get(Long userId, Long tripId, Language language) {
-		return toResponse(findMyTrip(userId, tripId), language);
+	public TripResponse get(Long userId, Long tripId, Language language, DisplayCurrency currency) {
+		return toResponse(findMyTrip(userId, tripId), language, currency);
 	}
 
 	/**
@@ -113,8 +119,11 @@ public class TripService {
 				.orElseThrow(() -> new ApiException(ErrorCode.TRIP_NOT_FOUND));
 	}
 
-	/** 여행 요약. 숙소·카테고리를 지연 로딩하므로 트랜잭션 안에서 부른다. 희망 예산은 원화로 준다 (환율 환산 전) */
-	public TripResponse toResponse(Trip trip, Language language) {
+	/**
+	 * 여행 요약. 숙소·카테고리를 지연 로딩하므로 트랜잭션 안에서 부른다. 희망 예산은 표시 통화로 환산해 준다
+	 * (외화인데 환율이 없으면 {@code 503 EXCHANGE_RATE_UNAVAILABLE}).
+	 */
+	public TripResponse toResponse(Trip trip, Language language, DisplayCurrency currency) {
 		Integer budget = trip.getBudgetPerPersonKrw();
 		return new TripResponse(
 				trip.getId(),
@@ -129,7 +138,7 @@ public class TripService {
 				trip.getDays() - 1,
 				trip.getDays(),
 				trip.getPartySize(),
-				budget == null ? null : Money.krw(budget),
+				budget == null ? null : exchangeService.fromKrw(budget, currency),
 				categories(trip, language),
 				stay(trip, language),
 				trips.hasDays(trip.getId()),
@@ -137,10 +146,10 @@ public class TripService {
 	}
 
 	/**
-	 * 같은 사용자의 여행 요청(만들기·조건 다시 저장)이 겹치지 않게 사용자 행을 잠근다. 잠그지 않으면 겹친 요청끼리
+	 * 같은 사용자의 여행 요청(만들기·조건 다시 저장·동선 만들기·확정)이 겹치지 않게 사용자 행을 잠근다. 잠그지 않으면 겹친 요청끼리
 	 * 한쪽 변경이 덮어써지거나 확정 전 여행이 둘이 될 수 있다. 사용자가 없으면(탈퇴) {@code 401}이다.
 	 */
-	private User lockUser(Long userId) {
+	User lockUser(Long userId) {
 		User user = entityManager.find(User.class, userId, LockModeType.PESSIMISTIC_WRITE);
 		if (user == null) {
 			throw new ApiException(ErrorCode.UNAUTHORIZED);
@@ -162,7 +171,7 @@ public class TripService {
 		if (request.partySize() < 1 || request.partySize() > properties.maxPartySize()) {
 			errors.add("partySize", "1~" + properties.maxPartySize() + "명이어야 합니다");
 		}
-		Integer budgetKrw = budgetKrw(request.budgetPerPerson(), errors);
+		checkBudget(request.budgetPerPerson(), errors);
 		TripRequest.Stay stay = request.stay();
 		switch (stay.type()) {
 			case PLACE -> {
@@ -175,32 +184,48 @@ public class TripService {
 					errors.add("stay.areaCode", "AREA이면 필수입니다");
 				}
 			}
-			case PIN -> errors.add("stay.type", "지도 핀(PIN)은 아직 받지 않습니다");
+			case PIN -> {
+				if (stay.location() == null) {
+					errors.add("stay.location", "PIN이면 필수입니다");
+				}
+			}
 		}
 		errors.throwIfAny();
+		Integer budgetKrw = budgetKrw(request.budgetPerPerson());
 		Set<Category> categories = request.categories() == null ? Set.of() : request.categories();
 		return new TripConditions(request.nationality(), request.startDate(), request.endDate(), request.partySize(),
 				budgetKrw, categories, resolveStay(stay));
 	}
 
-	/** 희망 예산(원). 환율 환산이 생기기 전에는 원화만 받는다 */
-	private static Integer budgetKrw(Money budget, FieldErrors errors) {
+	/**
+	 * 희망 예산 형식 검사. 원·엔은 정수, 달러·유로는 소수 둘째 자리까지. 원화 환산은 다른 입력 오류를 다 모은 뒤 {@link #budgetKrw}에서 한다.
+	 */
+	private static void checkBudget(Money budget, FieldErrors errors) {
+		if (budget == null) {
+			return;
+		}
+		if (!budget.currency().fits(budget.amount())) {
+			errors.add("budgetPerPerson.amount", switch (budget.currency()) {
+				case KRW -> "원 단위 정수여야 합니다";
+				case JPY -> "엔 단위 정수여야 합니다";
+				case USD, EUR -> "소수 둘째 자리까지여야 합니다";
+			});
+		} else if (budget.amount().compareTo(MAX_BUDGET_KRW) > 0) {
+			// 표시 통화는 모두 1단위가 1원 이상이라, 금액만으로 한도를 넘으면 원화로 바꿔도 넘는다
+			errors.add("budgetPerPerson.amount", "너무 큽니다");
+		}
+	}
+
+	/** 희망 예산(원). 외화는 오늘(서울) 환율로 바꾼다. 환율이 없으면 {@code 503 EXCHANGE_RATE_UNAVAILABLE} */
+	private Integer budgetKrw(Money budget) {
 		if (budget == null) {
 			return null;
 		}
-		if (budget.currency() != DisplayCurrency.KRW) {
-			errors.add("budgetPerPerson.currency", "지금은 KRW만 받습니다");
-			return null;
+		long krw = exchangeService.toKrw(budget);
+		if (krw > Integer.MAX_VALUE) {
+			new FieldErrors().add("budgetPerPerson.amount", "너무 큽니다").throwIfAny();
 		}
-		if (budget.amount().stripTrailingZeros().scale() > 0) {
-			errors.add("budgetPerPerson.amount", "원 단위 정수여야 합니다");
-			return null;
-		}
-		if (budget.amount().compareTo(MAX_BUDGET_KRW) > 0) {
-			errors.add("budgetPerPerson.amount", "너무 큽니다");
-			return null;
-		}
-		return budget.amount().intValueExact();
+		return (int) krw;
 	}
 
 	private TripConditions.Stay resolveStay(TripRequest.Stay stay) {
@@ -209,8 +234,28 @@ public class TripService {
 					.filter(place -> place.isLodging() && place.isActive())
 					.orElseThrow(() -> new ApiException(ErrorCode.PLACE_NOT_FOUND, "없는 숙박 장소입니다")));
 			case AREA -> TripConditions.Stay.of(stay.areaCode());
-			case PIN -> throw new IllegalStateException("PIN은 요청 검사에서 거절한다");
+			case PIN -> pin(stay.location());
 		};
+	}
+
+	/**
+	 * 지도 핀. 핀 위치 주소 API와 같은 Reverse Geocoding으로 주소와 서울 여부를 다시 확인하고, 핀 주소를 숙소 이름·주소로 둔다.
+	 * 서울 밖(바다·국외처럼 결과가 없는 곳 포함)이면 {@code 400 OUT_OF_SERVICE_AREA}, 호출이 실패하면 {@code 502 EXTERNAL_API_FAILED}다.
+	 * 여행 저장과 한 트랜잭션이라 DB 연결을 잡은 채 기다리고, 조건 다시 저장은 사용자 행도 잠근 채 기다린다
+	 * (네이버 시간 제한 안에서 같은 사용자의 다른 여행 요청만 기다린다. 잠그기 전에 부르면 확정·남의 여행보다 이 오류가 먼저 나온다).
+	 */
+	private TripConditions.Stay pin(LatLng location) {
+		GeoReverseResponse reverse = geoService.reverse(location.lat(), location.lng());
+		if (!reverse.inSeoul()) {
+			throw new ApiException(ErrorCode.OUT_OF_SERVICE_AREA);
+		}
+		FieldErrors errors = new FieldErrors();
+		if (reverse.address() == null) {
+			// 서울 안인데 도로명·지번 주소가 모두 없는 곳. 숙소 이름으로 쓸 주소가 없다
+			errors.add("stay.location", "주소가 없는 위치입니다");
+		}
+		errors.throwIfAny();
+		return TripConditions.Stay.of(location.toPoint(), reverse.address());
 	}
 
 	/** 국적. 목록에서 빠진 코드면 코드를 이름으로 준다 */
@@ -237,7 +282,8 @@ public class TripService {
 				.toList();
 	}
 
-	private static TripResponse.Stay stay(Trip trip, Language language) {
+	/** 여행의 숙소. 일자별 일정(TripDayService)도 같은 이름·좌표를 쓴다 */
+	static TripResponse.Stay stay(Trip trip, Language language) {
 		Place place = trip.getStayPlace();
 		// 지도 핀이면 저장한 핀 주소, 목록에서 빠진 지역이면 저장한 지역 이름(국문)
 		String nameKo = trip.getStayName();
@@ -257,5 +303,28 @@ public class TripService {
 	/** 저장된 코드의 상수. 국적·지역 목록이 잠정이라, 지난 여행에 목록에서 빠진 코드가 남아 있을 수 있다 */
 	private static <E extends Enum<E>> Optional<E> find(Class<E> type, String code) {
 		return Arrays.stream(type.getEnumConstants()).filter(constant -> constant.name().equals(code)).findFirst();
+	}
+	/**
+	 * [expense] 추가: 여행 확정 (API 명세 26). 새로 확정했으면 true, 이미 확정한 여행이면 아무것도 바꾸지 않고 false (그대로 200).
+	 * 동선을 만들기 전이면 409 ROUTE_NOT_CREATED, 끝나지 않은 다른 확정 여행이 있으면 409 ACTIVE_TRIP_EXISTS (activeTripId).
+	 */
+	@Transactional
+	public boolean confirm(Long userId, Long tripId) {
+		lockUser(userId);
+		Trip trip = findMyTrip(userId, tripId);
+		if (!trip.isEditable()) {
+			return false;
+		}
+		if (!trips.hasDays(trip.getId())) {
+			throw new ApiException(ErrorCode.ROUTE_NOT_CREATED);
+		}
+		List<Long> otherActiveTripIds = trips.findActiveTripIds(userId, LocalDate.now(clock)).stream()
+				.filter(id -> !id.equals(trip.getId()))
+				.toList();
+		if (!otherActiveTripIds.isEmpty()) {
+			throw new ApiException(ErrorCode.ACTIVE_TRIP_EXISTS, Map.of("activeTripId", otherActiveTripIds.getFirst()));
+		}
+		trip.confirm(clock.instant());
+		return true;
 	}
 }

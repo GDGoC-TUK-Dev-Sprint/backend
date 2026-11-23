@@ -11,6 +11,7 @@ import com.tukorea.gdgoc.koready.domain.place.dto.PlaceSummary;
 import com.tukorea.gdgoc.koready.domain.place.entity.SignalType;
 import com.tukorea.gdgoc.koready.domain.trip.entity.Trip;
 import com.tukorea.gdgoc.koready.domain.trip.entity.TripCategory;
+import com.tukorea.gdgoc.koready.domain.trip.service.RecommendedPlaces;
 import com.tukorea.gdgoc.koready.domain.trip.service.TripService;
 import com.tukorea.gdgoc.koready.global.dto.Code;
 import com.tukorea.gdgoc.koready.global.dto.LatLng;
@@ -31,10 +32,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 장소 선택의 추천 장소 목록과 장소 검색. 카테고리는 필터다 (고른 카테고리의 장소만, 하나도 고르지 않았으면 전체).
+ * 동선 만들기가 담은 장소를 채울 때도 같은 순위를 준다 ({@link RecommendedPlaces}).
  */
 @Service
 @RequiredArgsConstructor
-public class CandidateService {
+public class CandidateService implements RecommendedPlaces {
 
 	private final TripService tripService;
 	private final CandidateRepository candidates;
@@ -45,11 +47,8 @@ public class CandidateService {
 	@Transactional(readOnly = true)
 	public CandidatePage find(Long userId, Long tripId, CandidateQuery query, Language language) {
 		Trip trip = tripService.findMyTrip(userId, tripId);
-		Set<String> chosen = trip.getCategories().stream()
-				.map(TripCategory::getClass1Code)
-				.collect(Collectors.toSet());
-		// 추천 목록의 카테고리이자 필터로 고를 수 있는 카테고리: 고른 카테고리, 하나도 고르지 않았으면 8개 전체
-		Collection<String> listed = chosen.isEmpty() ? ALL_CATEGORIES : chosen;
+		Set<String> chosen = chosenCategories(trip);
+		Collection<String> listed = listedCategories(chosen);
 		FieldErrors errors = new FieldErrors();
 		if (query.category() != null && !listed.contains(query.category().name())) {
 			errors.add("category", "이 여행에서 고른 카테고리가 아닙니다");
@@ -67,6 +66,25 @@ public class CandidateService {
 		long totalCount = candidates.count(criteria);
 		return CandidatePage.of(guide(trip.getDays()),
 				PageResponse.of(items, query.page(), query.size(), totalCount));
+	}
+
+	/** 추천 목록 앞에서 limit곳 (카테고리 필터 없음 = 고른 카테고리 전체). 동선 만들기가 담은 장소를 채울 때 부른다 */
+	@Override
+	public List<Long> topPlaceIds(Trip trip, int limit) {
+		CandidateRepository.Criteria criteria = new CandidateRepository.Criteria(trip.getId(), trip.getStartDate(),
+				trip.getEndDate(), listedCategories(chosenCategories(trip)), null, properties.signalWeightM());
+		return candidates.find(criteria, 0, limit).stream().map(CandidateRepository.CandidateRow::placeId).toList();
+	}
+
+	private static Set<String> chosenCategories(Trip trip) {
+		return trip.getCategories().stream()
+				.map(TripCategory::getClass1Code)
+				.collect(Collectors.toSet());
+	}
+
+	/** 추천 목록의 카테고리이자 필터로 고를 수 있는 카테고리: 고른 카테고리, 하나도 고르지 않았으면 8개 전체 */
+	private static Collection<String> listedCategories(Set<String> chosen) {
+		return chosen.isEmpty() ? ALL_CATEGORIES : chosen;
 	}
 
 	private CandidatePage.Guide guide(int days) {

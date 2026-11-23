@@ -39,6 +39,7 @@ public enum ErrorCode {
 
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류입니다"),
 	EXTERNAL_API_FAILED(HttpStatus.BAD_GATEWAY, "외부 API 호출에 실패했습니다"),
+	EXCHANGE_RATE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "환율 데이터가 없어 환산할 수 없습니다"),
 	LLM_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "LLM 호출에 실패했습니다");
 
 	private final HttpStatus status;

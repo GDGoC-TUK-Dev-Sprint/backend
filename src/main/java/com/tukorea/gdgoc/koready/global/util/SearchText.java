@@ -34,11 +34,6 @@ public final class SearchText {
 		return "%" + escape(text) + "%";
 	}
 
-	/** ILIKE 앞부분 일치 패턴. 와일드카드 문자는 {@link #containsPattern}처럼 글자 그대로 찾는다 */
-	public static String prefixPattern(String text) {
-		return escape(text) + "%";
-	}
-
 	private static String escape(String text) {
 		return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
 	}

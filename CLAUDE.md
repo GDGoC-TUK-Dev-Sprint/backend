@@ -13,6 +13,8 @@ KOREADY API 서버.
 - 로컬 DB(PostgreSQL + PostGIS): `docker compose up -d`. 실행·테스트 전에 먼저 띄운다
 - 실행: `./gradlew bootRun` (`local` 프로필. 로그인이 생기기 전에는 헤더 `X-Dev-User-Id`로 사용자를 정한다)
 - 테스트: `./gradlew test`
+- DB 주소는 `DB_HOST`(기본 `localhost`)·`DB_PORT`·`DB_PASSWORD`로 받는다. 서버마다 다른 값(주소·키)은 `application.properties`에 `${이름:기본값}`으로 두고 서버에서 환경변수로 넣는다
+- 헬스 체크는 actuator `/actuator/health`. 배포가 이 주소로 성공을 판단하니 막거나 경로를 바꾸지 않는다
 - 장소·통계 적재 (원본 파일이 있는 사람만): 환경변수 `KOREADY_RAW_DIR`에 원본 폴더를 두고 `./gradlew bootRun --args='--spring.profiles.active=loader'`. 끝나면 종료한다
 
 ## 패키지 구조
