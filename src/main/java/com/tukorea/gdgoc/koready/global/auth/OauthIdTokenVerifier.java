@@ -5,6 +5,7 @@ import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.KeySourceException;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.jwk.source.JWKSourceBuilder;
+import com.nimbusds.jose.jwk.source.RateLimitReachedException;
 import com.nimbusds.jose.proc.BadJOSEException;
 import com.nimbusds.jose.proc.JWSVerificationKeySelector;
 import com.nimbusds.jose.proc.SecurityContext;
@@ -64,6 +65,9 @@ public class OauthIdTokenVerifier {
 				throw new ApiException(ErrorCode.INVALID_ID_TOKEN);
 			}
 			return new Identity(claims.getSubject(), claims.getStringClaim("name"));
+		} catch (RateLimitReachedException e) {
+			// 모르는 kid라 공개키를 다시 받으려다 호출 한도(30초)에 걸림: 제공자 장애가 아니라 토큰 문제다
+			throw new ApiException(ErrorCode.INVALID_ID_TOKEN);
 		} catch (KeySourceException e) {
 			// 제공자 공개키(JWKS)를 받지 못함: 토큰 문제가 아니라 외부 API 실패다
 			throw new ApiException(ErrorCode.EXTERNAL_API_FAILED, provider + " 공개키를 받지 못했습니다", e);
