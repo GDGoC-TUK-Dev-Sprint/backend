@@ -17,8 +17,10 @@ class TripPropertiesTest {
 
 	@Test
 	void bindsSettings() {
-		runner.withPropertyValues("koready.trip.max-days=10", "koready.trip.max-party-size=8")
-				.run(context -> assertThat(context.getBean(TripProperties.class)).isEqualTo(new TripProperties(10, 8)));
+		runner.withPropertyValues("koready.trip.max-days=10", "koready.trip.max-party-size=8",
+				"koready.trip.area-name-max-distance-m=4000")
+				.run(context -> assertThat(context.getBean(TripProperties.class))
+						.isEqualTo(new TripProperties(10, 8, 4000)));
 	}
 
 	@Test
