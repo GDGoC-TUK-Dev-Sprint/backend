@@ -9,8 +9,9 @@ import org.springframework.validation.annotation.Validated;
  *
  * @param maxDays 여행 최대 일수
  * @param maxPartySize 최대 인원
+ * @param areaNameMaxDistanceM 여행 목록의 지역 이름: 장소가 지역 중심에서 이 거리(m) 안일 때만 그 지역 이름을 붙인다
  */
 @Validated
 @ConfigurationProperties("koready.trip")
-public record TripProperties(@Min(1) int maxDays, @Min(1) int maxPartySize) {
+public record TripProperties(@Min(1) int maxDays, @Min(1) int maxPartySize, @Min(1) int areaNameMaxDistanceM) {
 }

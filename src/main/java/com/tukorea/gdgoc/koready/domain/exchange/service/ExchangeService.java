@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -62,6 +63,18 @@ public class ExchangeService {
 	}
 
 	/**
+	 * 표시 통화 1단위당 원화 (오늘 기준). 환율이 없으면 예외 없이 비어 있다. 환율이 없어도 응답을 줘야 하는 곳(여행 목록)에서
+	 * 한 번 읽어 {@link #fromKrw(long, DisplayCurrency, BigDecimal)}에 넘긴다. KRW는 1
+	 */
+	@Transactional(readOnly = true)
+	public Optional<BigDecimal> findKrwPerUnit(DisplayCurrency currency) {
+		if (currency == DisplayCurrency.KRW) {
+			return Optional.of(BigDecimal.ONE);
+		}
+		return findLatest(currency, LocalDate.now(clock)).map(ExchangeRate::getKrwPerUnit);
+	}
+
+	/**
 	 * 요청 금액(희망 예산·실제 지출)을 원 단위로 (오늘 환율, 반올림). 소수 자리 검사는 부르는 쪽이 필드 오류로 먼저 한다.
 	 */
 	@Transactional(readOnly = true)
@@ -76,16 +89,26 @@ public class ExchangeService {
 		if (currency == DisplayCurrency.KRW) {
 			return Money.krw(krw);
 		}
+		return fromKrw(krw, currency, krwPerUnit(currency));
+	}
+
+	/** 원화 금액 하나를 이미 읽어 둔 환율로 표시 통화로 바꾼다 (반올림). 여러 금액을 바꿀 때 환율을 한 번만 읽는다 */
+	public Money fromKrw(long krw, DisplayCurrency currency, BigDecimal krwPerUnit) {
+		if (currency == DisplayCurrency.KRW) {
+			return Money.krw(krw);
+		}
 		int scale = (currency == DisplayCurrency.USD || currency == DisplayCurrency.EUR) ? 2 : 0;
-		BigDecimal amount = BigDecimal.valueOf(krw).divide(krwPerUnit(currency), scale, RoundingMode.HALF_UP);
-		return new Money(amount, currency);
+		return new Money(BigDecimal.valueOf(krw).divide(krwPerUnit, scale, RoundingMode.HALF_UP), currency);
+	}
+
+	/** 그날 이전(당일 포함) 가장 최근 고시 환율. 없으면 비어 있다 */
+	private Optional<ExchangeRate> findLatest(DisplayCurrency currency, LocalDate date) {
+		return rates.findLatest(Currency.valueOf(currency.name()), date, PageRequest.of(0, 1)).stream().findFirst();
 	}
 
 	/** 그날 이전(당일 포함) 가장 최근 고시 환율. 없으면 503 */
 	private ExchangeRate latest(DisplayCurrency currency, LocalDate date) {
-		return rates.findLatest(Currency.valueOf(currency.name()), date, PageRequest.of(0, 1))
-				.stream()
-				.findFirst()
+		return findLatest(currency, date)
 				.orElseThrow(() -> new ApiException(ErrorCode.EXCHANGE_RATE_UNAVAILABLE,
 						currency + " 환율 데이터가 없어 환산할 수 없습니다"));
 	}

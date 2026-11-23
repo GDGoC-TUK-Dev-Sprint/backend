@@ -46,7 +46,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 여행 만들기·조건 다시 저장·여행 요약. 여행을 다루는 다른 API도 내 여행은 {@link #findMyTrip}으로 찾고,
+ * 여행 만들기·조건 다시 저장·삭제·확정·여행 요약 (목록은 {@link TripListService}). 여행을 다루는 다른 API도 내 여행은 {@link #findMyTrip}으로 찾고,
  * 응답에 여행 요약을 넣을 때는 {@link #toResponse}를 쓴다.
  */
 @Service
@@ -102,6 +102,16 @@ public class TripService {
 		return toResponse(trip, language, currency);
 	}
 
+	/**
+	 * 여행을 지운다. 상태와 상관없이 내 여행이면 지운다. 딸린 일자·일정 항목·이동 구간·고른 카테고리·확정 때의 예상 경비·실제 지출은
+	 * DB가 함께 지운다 (ON DELETE CASCADE). 만들기·확정과 겹치지 않게 사용자 행을 잠근다.
+	 */
+	@Transactional
+	public void delete(Long userId, Long tripId) {
+		lockUser(userId);
+		trips.delete(findMyTrip(userId, tripId));
+	}
+
 	/** 내 여행의 요약 */
 	@Transactional(readOnly = true)
 	public TripResponse get(Long userId, Long tripId, Language language, DisplayCurrency currency) {
@@ -125,6 +135,36 @@ public class TripService {
 	 */
 	public TripResponse toResponse(Trip trip, Language language, DisplayCurrency currency) {
 		Integer budget = trip.getBudgetPerPersonKrw();
+		return response(trip, language, budget == null ? null : exchangeService.fromKrw(budget, currency),
+				categories(trip, language, classNames(List.of(trip))), trips.hasDays(trip.getId()));
+	}
+
+	/**
+	 * 여행 목록의 여행 요약들 (순서 그대로). 동선 유무·분류 이름·환율을 여행마다 읽지 않고 한 번씩만 읽는다.
+	 * 목록은 환율이 없어도 줘야 하므로, 외화인데 환율이 없으면 희망 예산만 원화로 준다 (금액에 통화가 실려 있다).
+	 * 지연 로딩이 있어 트랜잭션 안에서 부른다
+	 */
+	List<TripResponse> toResponses(List<Trip> list, Language language, DisplayCurrency currency) {
+		if (list.isEmpty()) {
+			return List.of();
+		}
+		Set<Long> withDays = trips.findTripIdsWithDays(list.stream().map(Trip::getId).toList());
+		Map<String, PlaceClass> classNames = classNames(list);
+		Optional<BigDecimal> krwPerUnit = exchangeService.findKrwPerUnit(currency);
+		return list.stream()
+				.map(trip -> {
+					Integer budget = trip.getBudgetPerPersonKrw();
+					Money budgetMoney = budget == null ? null
+							: krwPerUnit.map(rate -> exchangeService.fromKrw(budget, currency, rate))
+									.orElseGet(() -> Money.krw(budget));
+					return response(trip, language, budgetMoney, categories(trip, language, classNames),
+							withDays.contains(trip.getId()));
+				})
+				.toList();
+	}
+
+	private TripResponse response(Trip trip, Language language, Money budgetPerPerson, List<Code> categories,
+			boolean routeCreated) {
 		return new TripResponse(
 				trip.getId(),
 				TICKET_NO.formatted(trip.getId()),
@@ -138,10 +178,10 @@ public class TripService {
 				trip.getDays() - 1,
 				trip.getDays(),
 				trip.getPartySize(),
-				budget == null ? null : exchangeService.fromKrw(budget, currency),
-				categories(trip, language),
+				budgetPerPerson,
+				categories,
 				stay(trip, language),
-				trips.hasDays(trip.getId()),
+				routeCreated,
 				SeoulTime.of(trip.getConfirmedAt()));
 	}
 
@@ -265,18 +305,27 @@ public class TripService {
 				.orElseGet(() -> new Code(code, code));
 	}
 
-	/** 고른 카테고리. 이름은 분류 코드표에서 읽고, 순서는 {@link Category} 선언 순서다 */
-	private List<Code> categories(Trip trip, Language language) {
-		Set<String> codes = trip.getCategories().stream()
+	/** 여행들이 고른 카테고리의 분류 (이름을 읽으려고). 고른 것이 없으면 조회하지 않는다 */
+	private Map<String, PlaceClass> classNames(List<Trip> list) {
+		Set<String> codes = list.stream()
+				.flatMap(trip -> trip.getCategories().stream())
 				.map(TripCategory::getClass1Code)
 				.collect(Collectors.toSet());
 		if (codes.isEmpty()) {
-			return List.of();
+			return Map.of();
 		}
-		Map<String, PlaceClass> byCode = placeClasses.findAllById(codes).stream()
+		return placeClasses.findAllById(codes).stream()
 				.collect(Collectors.toMap(PlaceClass::getCode, Function.identity()));
+	}
+
+	/** 고른 카테고리. 이름은 분류 코드표({@link #classNames})에서 읽고, 순서는 {@link Category} 선언 순서다 */
+	private static List<Code> categories(Trip trip, Language language, Map<String, PlaceClass> classNames) {
+		Set<String> codes = trip.getCategories().stream()
+				.map(TripCategory::getClass1Code)
+				.collect(Collectors.toSet());
 		return Arrays.stream(Category.values())
-				.map(category -> byCode.get(category.name()))
+				.filter(category -> codes.contains(category.name()))
+				.map(category -> classNames.get(category.name()))
 				.filter(Objects::nonNull)
 				.map(c -> new Code(c.getCode(), language.pick(c.getNameKo(), c.getNameEn())))
 				.toList();
