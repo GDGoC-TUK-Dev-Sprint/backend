@@ -105,7 +105,10 @@ public class AuthService {
 			throw AuthErrors.invalidRefreshToken();
 		}
 		User user = saved.getUser();
-		refreshTokenRepository.delete(saved);
+		// 같은 토큰으로 동시에 재발급하면 한쪽만 지운다. 못 지운 쪽은 이미 쓴 토큰이다
+		if (refreshTokenRepository.deleteByTokenHash(saved.getTokenHash()) == 0) {
+			throw AuthErrors.invalidRefreshToken();
+		}
 		return issueTokens(user, loginMethod(user));
 	}
 
@@ -135,10 +138,11 @@ public class AuthService {
 		String refreshToken = jwtProvider.newRefreshTokenValue();
 		Instant refreshExpiresAt = jwtProvider.refreshExpiresAt();
 		refreshTokenRepository.save(RefreshToken.of(user, jwtProvider.hash(refreshToken), refreshExpiresAt));
-		String accessToken = jwtProvider.createAccessToken(user.getId());
+		Instant accessExpiresAt = jwtProvider.accessExpiresAt();
+		String accessToken = jwtProvider.createAccessToken(user.getId(), accessExpiresAt);
 		return new TokenResponse(
 				accessToken,
-				SeoulTime.of(jwtProvider.accessExpiresAt()),
+				SeoulTime.of(accessExpiresAt),
 				refreshToken,
 				SeoulTime.of(refreshExpiresAt),
 				TokenResponse.TOKEN_TYPE,
