@@ -15,6 +15,7 @@ import java.text.ParseException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HexFormat;
@@ -50,12 +51,16 @@ public class JwtProvider {
 	}
 
 	public String createAccessToken(Long userId) {
-		Instant now = clock.instant();
+		return createAccessToken(userId, accessExpiresAt());
+	}
+
+	/** 만료 시각을 정해 발급한다. 응답의 accessTokenExpiresAt과 토큰의 exp가 같은 값이 되도록 {@link #accessExpiresAt()}를 넘긴다 */
+	public String createAccessToken(Long userId, Instant expiresAt) {
 		JWTClaimsSet claims = new JWTClaimsSet.Builder()
 				.subject(String.valueOf(userId))
 				.claim("type", "access")
-				.issueTime(Date.from(now))
-				.expirationTime(Date.from(now.plus(Duration.ofMinutes(accessMinutes))))
+				.issueTime(Date.from(clock.instant()))
+				.expirationTime(Date.from(expiresAt))
 				.build();
 		try {
 			SignedJWT jwt = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claims);
@@ -117,7 +122,13 @@ public class JwtProvider {
 		}
 	}
 
+	/** 지금 발급하는 리프레시 토큰의 만료 시각 (초 단위) */
 	public Instant refreshExpiresAt() {
-		return clock.instant().plus(Duration.ofDays(refreshDays));
+		return clock.instant().plus(Duration.ofDays(refreshDays)).truncatedTo(ChronoUnit.SECONDS);
+	}
+
+	/** 지금 발급하는 액세스 토큰의 만료 시각 (AuthTokens.accessTokenExpiresAt). JWT의 exp가 초 단위라 초로 자른다 */
+	public Instant accessExpiresAt() {
+		return clock.instant().plus(Duration.ofMinutes(accessMinutes)).truncatedTo(ChronoUnit.SECONDS);
 	}
 }

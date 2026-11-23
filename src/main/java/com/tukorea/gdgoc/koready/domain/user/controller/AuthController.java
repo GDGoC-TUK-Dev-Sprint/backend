@@ -27,11 +27,11 @@ public class AuthController {
 
 	private final AuthService authService;
 
-	/** 회원가입-06 */
+	/** 회원가입-06 (API 명세 1). 가입하면 바로 로그인 상태: 201 + 토큰 묶음(AuthTokens) */
 	@PostMapping("/signup")
 	@ResponseStatus(HttpStatus.CREATED)
-	public void signup(@Valid @RequestBody SignupRequest req) {
-		authService.signup(req);
+	public TokenResponse signup(@Valid @RequestBody SignupRequest req) {
+		return authService.signup(req);
 	}
 
 	/** 회원가입-07 아이디 중복 확인. 형식이 틀리면 400 INVALID_REQUEST (available로 답하지 않는다) */

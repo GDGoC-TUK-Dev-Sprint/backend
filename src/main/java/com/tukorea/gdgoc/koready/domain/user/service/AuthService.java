@@ -13,9 +13,12 @@ import com.tukorea.gdgoc.koready.domain.user.repository.RefreshTokenRepository;
 import com.tukorea.gdgoc.koready.domain.user.repository.UserRepository;
 import com.tukorea.gdgoc.koready.security.JwtProvider;
 import com.tukorea.gdgoc.koready.global.auth.OauthIdTokenVerifier;
+import com.tukorea.gdgoc.koready.global.util.SeoulTime;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Locale;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,6 +31,9 @@ public class AuthService {
 
 	/** BCrypt는 72바이트까지만 처리한다 (한글은 글자당 3바이트) */
 	private static final int BCRYPT_MAX_BYTES = 72;
+
+	/** 아이디·비밀번호 계정의 로그인 수단 (UserSummary.loginMethod) */
+	private static final String LOGIN_METHOD_ID = "ID";
 
 	private final UserRepository userRepository;
 	private final OauthAccountRepository oauthAccountRepository;
@@ -42,22 +48,26 @@ public class AuthService {
 		return !userRepository.existsByLoginId(loginId);
 	}
 
+	/** 회원가입 (API 명세 1). 가입하면 바로 로그인 상태가 되도록 토큰 묶음을 준다 */
 	@Transactional
-	public void signup(SignupRequest req) {
+	public TokenResponse signup(SignupRequest req) {
 		if (tooLongForBcrypt(req.password())) {
 			throw AuthErrors.passwordTooLong();
 		}
 		if (userRepository.existsByLoginId(req.loginId())) {
 			throw AuthErrors.duplicatedLoginId();
 		}
+		User user;
 		try {
-			userRepository.saveAndFlush(User.ofLocal(
+			user = userRepository.saveAndFlush(User.ofLocal(
 					req.loginId(), passwordEncoder.encode(req.password()), req.name().trim()));
 		} catch (DataIntegrityViolationException e) {
 			throw AuthErrors.duplicatedLoginId(); // 동시 가입으로 unique 제약에 걸린 경우
 		}
+		return issueTokens(user, LOGIN_METHOD_ID);
 	}
 
+	/** 로그인 (API 명세 2). 그 사용자의 만료된 리프레시 토큰은 이때 지운다 */
 	@Transactional
 	public TokenResponse login(LoginRequest req) {
 		if (tooLongForBcrypt(req.password())) {
@@ -66,18 +76,24 @@ public class AuthService {
 		User user = userRepository.findByLoginId(req.loginId())
 				.filter(u -> passwordEncoder.matches(req.password(), u.getPasswordHash()))
 				.orElseThrow(AuthErrors::loginFailed);
-		return issueTokens(user);
+		refreshTokenRepository.deleteExpiredByUserId(user.getId(), clock.instant());
+		return issueTokens(user, LOGIN_METHOD_ID);
 	}
 
+	/** 소셜 로그인 (API 명세 3). 처음 로그인하면 계정을 만들고 newUser = true */
 	@Transactional
 	public TokenResponse oauthLogin(String providerName, OauthLoginRequest req) {
 		OauthProvider provider = parseProvider(providerName);
 		OauthIdTokenVerifier.Identity identity = oauthIdTokenVerifier.verify(provider, req.idToken());
 
-		User user = oauthAccountRepository.findByProviderAndSubject(provider, identity.subject())
-				.map(OauthAccount::getUser)
+		Optional<OauthAccount> account = oauthAccountRepository.findByProviderAndSubject(provider, identity.subject());
+		boolean newUser = account.isEmpty();
+		User user = account.map(OauthAccount::getUser)
 				.orElseGet(() -> createSocialUser(provider, identity, req.name()));
-		return issueTokens(user);
+		if (!newUser) {
+			refreshTokenRepository.deleteExpiredByUserId(user.getId(), clock.instant());
+		}
+		return issueTokens(user, provider.name()).withNewUser(newUser);
 	}
 
 	/** 리프레시 토큰을 쓰면 새 토큰으로 교체한다(기존 토큰은 폐기). */
@@ -89,8 +105,11 @@ public class AuthService {
 			throw AuthErrors.invalidRefreshToken();
 		}
 		User user = saved.getUser();
-		refreshTokenRepository.delete(saved);
-		return issueTokens(user);
+		// 같은 토큰으로 동시에 재발급하면 한쪽만 지운다. 못 지운 쪽은 이미 쓴 토큰이다
+		if (refreshTokenRepository.deleteByTokenHash(saved.getTokenHash()) == 0) {
+			throw AuthErrors.invalidRefreshToken();
+		}
+		return issueTokens(user, loginMethod(user));
 	}
 
 	/** 로그아웃: 이 기기의 리프레시 토큰을 폐기한다. 없는 토큰이어도 오류 없이 끝난다(멱등). */
@@ -114,11 +133,31 @@ public class AuthService {
 		}
 	}
 
-	private TokenResponse issueTokens(User user) {
+	/** 토큰 묶음 (API 명세 AuthTokens). 리프레시 토큰은 해시만 저장한다 */
+	private TokenResponse issueTokens(User user, String loginMethod) {
 		String refreshToken = jwtProvider.newRefreshTokenValue();
-		refreshTokenRepository.save(RefreshToken.of(
-				user, jwtProvider.hash(refreshToken), jwtProvider.refreshExpiresAt()));
-		return new TokenResponse(jwtProvider.createAccessToken(user.getId()), refreshToken);
+		Instant refreshExpiresAt = jwtProvider.refreshExpiresAt();
+		refreshTokenRepository.save(RefreshToken.of(user, jwtProvider.hash(refreshToken), refreshExpiresAt));
+		Instant accessExpiresAt = jwtProvider.accessExpiresAt();
+		String accessToken = jwtProvider.createAccessToken(user.getId(), accessExpiresAt);
+		return new TokenResponse(
+				accessToken,
+				SeoulTime.of(accessExpiresAt),
+				refreshToken,
+				SeoulTime.of(refreshExpiresAt),
+				TokenResponse.TOKEN_TYPE,
+				new TokenResponse.UserSummary(user.getId(), user.getName(), loginMethod),
+				null);
+	}
+
+	/** 재발급할 때의 로그인 수단: 아이디 계정이면 ID, 아니면 연결된 소셜 계정의 제공자 */
+	private String loginMethod(User user) {
+		if (user.getLoginId() != null) {
+			return LOGIN_METHOD_ID;
+		}
+		return oauthAccountRepository.findFirstByUserIdOrderByIdAsc(user.getId())
+				.map(account -> account.getProvider().name())
+				.orElse(LOGIN_METHOD_ID);
 	}
 
 	private OauthProvider parseProvider(String name) {
