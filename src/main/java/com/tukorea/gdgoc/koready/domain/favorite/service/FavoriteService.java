@@ -1,6 +1,5 @@
 package com.tukorea.gdgoc.koready.domain.favorite.service;
 
-import com.tukorea.gdgoc.koready.domain.favorite.entity.Favorite;
 import com.tukorea.gdgoc.koready.domain.favorite.repository.FavoriteRepository;
 import com.tukorea.gdgoc.koready.domain.place.repository.PlaceRepository;
 import com.tukorea.gdgoc.koready.domain.user.repository.UserRepository;
@@ -24,23 +23,18 @@ public class FavoriteService {
 
 	/**
 	 * 찜한다. 사라진 장소(TourAPI에서 빠짐)·숙박도 찜할 수 있다.
-	 * 트랜잭션으로 묶지 않는다: 넣다가 제약에 걸리면(겹친 요청이 먼저 찜함, 그 사이 탈퇴·장소 삭제) 다시 확인해 답을 정하는데,
+	 * 트랜잭션으로 묶지 않는다: 확인과 넣기 사이에 탈퇴하거나 장소가 지워지면 FK 위반이 나고, 그때 다시 확인해 답을 정하는데
 	 * 한 트랜잭션 안이면 제약 위반 뒤의 조회가 실패한다.
 	 *
 	 * @throws ApiException 탈퇴한 사용자면 {@code 401 UNAUTHORIZED}, 없는 장소면 {@code 404 PLACE_NOT_FOUND}
 	 */
 	public void add(Long userId, Long placeId) {
 		requireUserAndPlace(userId, placeId);
-		if (favorites.existsByUserIdAndPlaceId(userId, placeId)) {
-			return;
-		}
 		try {
-			favorites.saveAndFlush(Favorite.create(users.getReferenceById(userId), places.getReferenceById(placeId)));
+			favorites.insertIfAbsent(userId, placeId);
 		} catch (DataIntegrityViolationException e) {
 			requireUserAndPlace(userId, placeId);
-			if (!favorites.existsByUserIdAndPlaceId(userId, placeId)) {
-				throw e;
-			}
+			throw e;
 		}
 	}
 

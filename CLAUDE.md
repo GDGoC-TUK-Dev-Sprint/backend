@@ -52,7 +52,7 @@ API를 만들 때 따로 만들지 말고 이것을 쓴다. 쓰는 법은 각 �
 - 로그인 사용자는 `@LoginUserId Long userId`. 인증 필터는 요청 속성 `LoginUserIdArgumentResolver.REQUEST_ATTRIBUTE`에 사용자 ID만 넣는다
 - 요청 언어는 `Language language`(`language.pick(ko, en)`)
 - "오늘"·"지금"은 `Clock` 빈(`LocalDate.now(clock)`), 기록 시각 응답은 `SeoulTime.of`
-- `created_at`·`updated_at`은 `@CreationTimestamp`·`@UpdateTimestamp`로 채운다
+- `created_at`·`updated_at`은 `@CreationTimestamp`·`@UpdateTimestamp`로 채운다. 예외: 겹친 요청에도 행이 하나여야 해서 네이티브 upsert(`ON CONFLICT DO NOTHING`)로 넣는 행은 SQL `now()`로 채운다 (찜하기 `FavoriteRepository.insertIfAbsent`)
 - 설정값은 `koready.*`에 두고 그 도메인 `config` 패키지의 `@ConfigurationProperties` 레코드로 읽는다
 - 정수 필드에 소수가 오면 `400`이다 (`accept-float-as-int=false`). 자동 구성 `RestClient`의 외부 API 응답에도 걸리므로 소수로 올 수 있는 값은 `double`·`BigDecimal`로 받는다
 
