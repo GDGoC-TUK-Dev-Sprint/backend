@@ -15,11 +15,8 @@ import com.tukorea.gdgoc.koready.global.dto.DisplayCurrency;
 import com.tukorea.gdgoc.koready.global.web.Language;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,8 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ExpenseService {
 
-	/** 화면에 보여 주는 항목 순서 */
-	private static final List<ExpenseItem> DISPLAY_ORDER = List.of(
+	/** 화면에 보여 주는 항목 순서 (지출 입력·리포트도 같은 순서) */
+	static final List<ExpenseItem> DISPLAY_ORDER = List.of(
 			ExpenseItem.FOOD, ExpenseItem.SIGHTSEEING, ExpenseItem.TRANSPORT, ExpenseItem.SHOPPING, ExpenseItem.OTHER);
 
 	private final TripService tripService;
@@ -197,7 +194,7 @@ public class ExpenseService {
 	}
 
 	private static String format(BigDecimal amount) {
-		return new DecimalFormat("#,##0.##", DecimalFormatSymbols.getInstance(Locale.ROOT)).format(amount);
+		return ExpenseLabels.amount(amount);
 	}
 
 	/** 데이터 한계 (화면에 그대로 쓰는 문장) */

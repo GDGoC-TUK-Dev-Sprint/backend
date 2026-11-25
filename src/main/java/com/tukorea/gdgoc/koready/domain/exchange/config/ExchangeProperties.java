@@ -9,7 +9,7 @@ import org.springframework.validation.annotation.Validated;
 /**
  * 환율 수집 설정 ({@code koready.exchange.*}).
  *
- * @param collectCron 오늘 환율을 받는 시각 (서울, Spring cron 6자리). 고시는 영업일 오전 11시쥔이다
+ * @param collectCron 오늘 환율을 받는 시각 (서울, Spring cron 6자리). 고시는 영업일 오전 11시쯤이다
  * @param backfillDays 서버를 켤 때 오늘부터 거슬러 올라가 비어 있는 날을 채우는 일수 (0이면 채우지 않는다)
  */
 @Validated

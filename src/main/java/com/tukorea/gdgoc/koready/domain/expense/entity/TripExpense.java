@@ -59,4 +59,22 @@ public class TripExpense {
 	/** 표시 순서 (기타 항목이 여럿일 때) */
 	@Column(nullable = false)
 	private Short seq;
+
+	/**
+	 * 실제 지출 한 줄 (전체 인원 합계, 원화). 기타(OTHER)는 이름이 있어야 하고, 다른 항목은 이름을 두지 않는다
+	 *
+	 * @param seq 보낸 순서 (0부터)
+	 */
+	public static TripExpense of(Trip trip, ExpenseItem item, String label, int amountKrw, int seq) {
+		if ((item == ExpenseItem.OTHER) != (label != null)) {
+			throw new IllegalArgumentException("기타 항목만 이름이 있다: " + item);
+		}
+		TripExpense expense = new TripExpense();
+		expense.trip = trip;
+		expense.item = item;
+		expense.label = label;
+		expense.amountKrw = amountKrw;
+		expense.seq = (short) seq;
+		return expense;
+	}
 }

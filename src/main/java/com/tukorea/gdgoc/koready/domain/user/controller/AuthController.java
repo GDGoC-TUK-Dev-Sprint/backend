@@ -53,7 +53,7 @@ public class AuthController {
 		return authService.oauthLogin(provider, req);
 	}
 
-	/** 토큰 재발급 (명세에 경로가 없어 임의로 정함 → 프론트와 합의 필요) */
+	/** 토큰 재발급 (API 명세 4). 쓴 리프레시 토큰은 다시 쓸 수 없다 (회전) */
 	@PostMapping("/refresh")
 	public TokenResponse refresh(@Valid @RequestBody RefreshRequest req) {
 		return authService.refresh(req.refreshToken());

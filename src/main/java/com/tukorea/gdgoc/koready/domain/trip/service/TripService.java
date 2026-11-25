@@ -145,6 +145,15 @@ public class TripService {
 	}
 
 	/**
+	 * 사용자 행을 잠그고 내 여행을 찾는다. 여행에 딸린 데이터를 지우고 다시 넣는 다른 도메인 쓰기(실제 지출 저장)가
+	 * 같은 사용자의 요청과 겹치지 않게 한다. 없거나 남의 여행이면 {@code 404 TRIP_NOT_FOUND}
+	 */
+	public Trip lockMyTrip(Long userId, Long tripId) {
+		lockUser(userId);
+		return findMyTrip(userId, tripId);
+	}
+
+	/**
 	 * 여행 요약. 숙소·카테고리를 지연 로딩하므로 트랜잭션 안에서 부른다. 희망 예산은 표시 통화로 환산해 준다
 	 * (외화인데 환율이 없으면 {@code 503 EXCHANGE_RATE_UNAVAILABLE}).
 	 */
