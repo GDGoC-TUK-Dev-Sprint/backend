@@ -6,6 +6,7 @@ import com.tukorea.gdgoc.koready.domain.place.entity.Place;
 import com.tukorea.gdgoc.koready.domain.user.entity.User;
 import com.tukorea.gdgoc.koready.global.exception.ApiException;
 import com.tukorea.gdgoc.koready.global.exception.ErrorCode;
+import com.tukorea.gdgoc.koready.global.util.Texts;
 import jakarta.persistence.CheckConstraint;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -218,8 +219,8 @@ public class Trip {
 		stayType = stay.type();
 		stayPlace = stay.place();
 		stayAreaCode = codeOf(stay.area());
-		stayName = truncate(stay.name(), STAY_NAME_LENGTH);
-		stayAddress = truncate(stay.address(), STAY_ADDRESS_LENGTH);
+		stayName = Texts.truncate(stay.name(), STAY_NAME_LENGTH);
+		stayAddress = Texts.truncate(stay.address(), STAY_ADDRESS_LENGTH);
 		stayLocation = stay.location();
 		replaceCategories(conditions.categories());
 	}
@@ -254,13 +255,6 @@ public class Trip {
 		return area == null ? null : area.name();
 	}
 
-	/** 글자 수로 자른다. PostgreSQL varchar(n)이 글자(코드 포인트) 수로 세므로 UTF-16 두 칸인 글자를 반으로 가르지 않는다 */
-	private static String truncate(String value, int maxLength) {
-		if (value == null || value.codePointCount(0, value.length()) <= maxLength) {
-			return value;
-		}
-		return value.substring(0, value.offsetByCodePoints(0, maxLength));
-	}
 	// [expense] 추가: 여행 확정 (확정한 여행은 편집할 수 없다)
 	public void confirm(Instant now) {
 		requireEditable();

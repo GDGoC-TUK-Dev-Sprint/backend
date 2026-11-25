@@ -14,6 +14,7 @@ import com.tukorea.gdgoc.koready.domain.user.repository.UserRepository;
 import com.tukorea.gdgoc.koready.security.JwtProvider;
 import com.tukorea.gdgoc.koready.global.auth.OauthIdTokenVerifier;
 import com.tukorea.gdgoc.koready.global.util.SeoulTime;
+import com.tukorea.gdgoc.koready.global.util.Texts;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
@@ -31,6 +32,9 @@ public class AuthService {
 
 	/** BCrypt는 72바이트까지만 처리한다 (한글은 글자당 3바이트) */
 	private static final int BCRYPT_MAX_BYTES = 72;
+
+	/** {@code users.name} 길이. 소셜 제공자가 준 이름은 이보다 길 수 있어 잘라 저장한다 */
+	private static final int NAME_MAX_LENGTH = 50;
 
 	/** 아이디·비밀번호 계정의 로그인 수단 (UserSummary.loginMethod) */
 	private static final String LOGIN_METHOD_ID = "ID";
@@ -120,9 +124,10 @@ public class AuthService {
 
 	private User createSocialUser(OauthProvider provider, OauthIdTokenVerifier.Identity identity,
 			String requestName) {
-		String name = firstNonBlank(identity.name(), requestName);
-		if (name != null && name.length() > 50) {
-			name = name.substring(0, 50);
+		String name = Texts.truncate(firstNonBlank(identity.name(), requestName), NAME_MAX_LENGTH);
+		if (name != null) {
+			// 자른 자리가 공백이면 끝에 공백이 남는다
+			name = name.stripTrailing();
 		}
 		try {
 			User user = userRepository.save(User.ofSocial(name));
