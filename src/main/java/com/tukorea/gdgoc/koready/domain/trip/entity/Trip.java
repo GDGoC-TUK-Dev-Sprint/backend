@@ -208,6 +208,14 @@ public class Trip {
 		return today.isAfter(endDate) ? TripProgress.COMPLETED : TripProgress.ONGOING;
 	}
 
+	/**
+	 * 끝난 확정 여행인지 (지출 입력·리포트를 받는 여행). 지금은 종료일이 지난 확정 여행이다.
+	 * 여행 종료(API 명세 33, {@code trips.ended_at})가 생기면 종료한 확정 여행도 여기서 끝난 여행으로 본다.
+	 */
+	public boolean isCompletedOn(LocalDate today) {
+		return status == TripStatus.CONFIRMED && progressOn(today) == TripProgress.COMPLETED;
+	}
+
 	private void apply(TripConditions conditions) {
 		nationalityCode = conditions.nationality().name();
 		startDate = conditions.startDate();
