@@ -3,7 +3,6 @@ package com.tukorea.gdgoc.koready.domain.placedetail.service;
 import com.tukorea.gdgoc.koready.domain.exchange.service.ExchangeService;
 import com.tukorea.gdgoc.koready.domain.favorite.repository.FavoriteRepository;
 import com.tukorea.gdgoc.koready.domain.place.dto.PlaceSummary;
-import com.tukorea.gdgoc.koready.domain.place.entity.HoursType;
 import com.tukorea.gdgoc.koready.domain.place.entity.Place;
 import com.tukorea.gdgoc.koready.domain.place.entity.PlaceFee;
 import com.tukorea.gdgoc.koready.domain.place.entity.PlaceOpeningHour;
@@ -29,9 +28,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -88,11 +84,10 @@ public class PlaceDetailService {
 
 	private PlaceDetailResponse.Hours hours(Place place, Language language) {
 		List<PlaceOpeningHour> rows = openingHours.findByPlaceIds(List.of(place.getId()));
-		OpeningHours.Now now = OpeningHours.of(place, rows).now(LocalDateTime.now(clock));
-		Set<Integer> openDays = rows.stream().map(row -> (int) row.getDayOfWeek()).collect(Collectors.toSet());
-		List<String> closedDays = place.getHoursType() != HoursType.STRUCTURED ? List.of()
-				: IntStream.rangeClosed(1, 7).filter(day -> !openDays.contains(day)).mapToObj(PlaceDetailService::dayName)
-						.toList();
+		LocalDateTime at = LocalDateTime.now(clock);
+		OpeningHours hours = OpeningHours.of(place, rows);
+		OpeningHours.Now now = hours.now(at);
+		List<String> closedDays = hours.closedDays(at.toLocalDate()).stream().map(PlaceDetailService::dayName).toList();
 		return new PlaceDetailResponse.Hours(
 				place.getHoursType(),
 				new PlaceDetailResponse.Now(now.status(), now.closesAt(), now.lastEntryAt()),

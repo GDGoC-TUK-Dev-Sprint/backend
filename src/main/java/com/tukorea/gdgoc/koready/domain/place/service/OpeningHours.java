@@ -115,6 +115,7 @@ public record OpeningHours(HoursType type, List<Row> rows, LocalDate eventStart,
 	/**
 	 * {@code at}에 운영 중인지 (장소 상세 "지금 운영 중"). 그날 행에 더해 전날 자정을 넘겨 영업하는 행도 본다.
 	 * 상시 개방은 {@code OPEN}, 확인 필요는 {@code UNKNOWN}이고, 축제·행사 기간 밖이면 {@code CLOSED}다.
+	 * 입장 마감이 지나면 닫는 시각 전이어도 {@code CLOSED}다 (일정 경고가 그 시각 도착을 머물 수 없다고 보는 것과 같다).
 	 * 닫는 시각·입장 마감은 {@code OPEN}·{@code BREAK}일 때만 준다.
 	 */
 	public Now now(LocalDateTime at) {
@@ -128,7 +129,7 @@ public record OpeningHours(HoursType type, List<Row> rows, LocalDate eventStart,
 		int time = minutes(at.toLocalTime());
 		if (opensOn(date)) {
 			for (Row row : applicable(date)) {
-				if (minutes(row.open()) <= time && time < closeMinutes(row)) {
+				if (minutes(row.open()) <= time && admits(row, time)) {
 					return now(row, time);
 				}
 			}
@@ -136,7 +137,7 @@ public record OpeningHours(HoursType type, List<Row> rows, LocalDate eventStart,
 		LocalDate yesterday = date.minusDays(1);
 		if (opensOn(yesterday)) {
 			for (Row row : applicable(yesterday)) {
-				if (time + MINUTES_PER_DAY < closeMinutes(row)) {
+				if (admits(row, time + MINUTES_PER_DAY)) {
 					return now(row, time + MINUTES_PER_DAY);
 				}
 			}
@@ -158,6 +159,21 @@ public record OpeningHours(HoursType type, List<Row> rows, LocalDate eventStart,
 			}
 		}
 		return new Now(status, row.close(), row.lastEntry());
+	}
+
+	/**
+	 * 그 날짜부터 한 주 동안 열지 않는 요일(1 월 … 7 일). 행이 없는 요일과, 계절 행만 있는데 그 계절이 아닌 요일이다.
+	 * {@code STRUCTURED}가 아니면 비어 있다.
+	 */
+	public List<Integer> closedDays(LocalDate date) {
+		if (!restricted()) {
+			return List.of();
+		}
+		return date.datesUntil(date.plusDays(7))
+				.filter(day -> applicable(day).isEmpty())
+				.map(day -> day.getDayOfWeek().getValue())
+				.sorted()
+				.toList();
 	}
 
 	private boolean restricted() {
@@ -196,6 +212,18 @@ public record OpeningHours(HoursType type, List<Row> rows, LocalDate eventStart,
 			lastEntry += MINUTES_PER_DAY;
 		}
 		return from <= lastEntry;
+	}
+
+	/** {@code time}(그 행의 날 0시부터의 분, 여는 시각 이후)에 들어갈 수 있는지: 닫는 시각 전이고 입장 마감을 넘기지 않았다 */
+	private static boolean admits(Row row, int time) {
+		if (time >= closeMinutes(row)) {
+			return false;
+		}
+		if (row.lastEntry() == null) {
+			return true;
+		}
+		int lastEntry = minutes(row.lastEntry());
+		return time <= (lastEntry < minutes(row.open()) ? lastEntry + MINUTES_PER_DAY : lastEntry);
 	}
 
 	/** 닫는 시각(분). 자정을 넘기면 다음 날로 센다 */

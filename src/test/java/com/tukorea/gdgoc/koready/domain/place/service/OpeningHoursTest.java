@@ -133,6 +133,30 @@ class OpeningHoursTest {
 	}
 
 	@Test
+	void nowIsClosedAfterLastEntry() {
+		OpeningHours hours = hours(row(2, "09:00", "18:00", "17:00"));
+		OpeningHours mondayNight = hours(row(1, "18:00", "02:00", "01:00"));
+
+		assertThat(hours.now(at(TUESDAY, "17:00")).status()).isEqualTo(Status.OPEN);
+		assertThat(hours.now(at(TUESDAY, "17:01"))).isEqualTo(new Now(Status.CLOSED, null, null));
+		assertThat(mondayNight.now(at(TUESDAY, "01:00")).status()).isEqualTo(Status.OPEN);
+		assertThat(mondayNight.now(at(TUESDAY, "01:30")).status()).isEqualTo(Status.CLOSED);
+	}
+
+	@Test
+	void closedDaysAreWeekdaysWithoutRowsOrOutOfSeason() {
+		OpeningHours hours = new OpeningHours(HoursType.STRUCTURED, List.of(
+				new OpeningHours.Row(1, "06-01", "08-31", time("09:00"), time("18:00"), null, null, null),
+				new OpeningHours.Row(2, null, null, time("09:00"), time("18:00"), null, null, null),
+				new OpeningHours.Row(3, "11-01", "02-29", time("10:00"), time("17:00"), null, null, null)), null, null);
+		OpeningHours unknown = new OpeningHours(HoursType.UNKNOWN, List.of(), null, null);
+
+		assertThat(hours.closedDays(TUESDAY)).containsExactly(1, 4, 5, 6, 7);
+		assertThat(hours.closedDays(LocalDate.of(2026, 7, 7))).containsExactly(3, 4, 5, 6, 7);
+		assertThat(unknown.closedDays(TUESDAY)).isEmpty();
+	}
+
+	@Test
 	void nowOfAlwaysOpenAndUnknownPlaces() {
 		OpeningHours unknown = new OpeningHours(HoursType.UNKNOWN, List.of(), null, null);
 
