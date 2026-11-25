@@ -23,7 +23,7 @@ import tools.jackson.databind.json.JsonMapper;
  * <ul>
  *   <li>JPY는 100엔 기준({@code JPY(100)})으로 오므로 100으로 나눠 1엔 기준으로 바꾼다</li>
  *   <li>금액은 {@code "1,234.5"}처럼 쉼표가 붙은 문자열로 온다</li>
- *   <li>주말·공휴일·고시 전(오전 11시쥔 전)에는 빈 배열이 온다 → 빈 맵</li>
+ *   <li>주말·공휴일·고시 전(오전 11시쯤 전)에는 빈 배열이 온다 → 빈 맵</li>
  * </ul>
  * 호출이 실패하거나(연결·시간 초과·HTTP 오류) 오류 결과 코드가 오거나 응답을 읽지 못하면 {@code 502 EXTERNAL_API_FAILED}다.
  */

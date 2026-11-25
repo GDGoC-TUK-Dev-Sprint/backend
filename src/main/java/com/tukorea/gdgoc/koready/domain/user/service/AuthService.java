@@ -32,6 +32,9 @@ public class AuthService {
 	/** BCrypt는 72바이트까지만 처리한다 (한글은 글자당 3바이트) */
 	private static final int BCRYPT_MAX_BYTES = 72;
 
+	/** {@code users.name} 길이. 소셜 제공자가 준 이름은 이보다 길 수 있어 잘라 저장한다 */
+	private static final int NAME_MAX_LENGTH = 50;
+
 	/** 아이디·비밀번호 계정의 로그인 수단 (UserSummary.loginMethod) */
 	private static final String LOGIN_METHOD_ID = "ID";
 
@@ -120,10 +123,7 @@ public class AuthService {
 
 	private User createSocialUser(OauthProvider provider, OauthIdTokenVerifier.Identity identity,
 			String requestName) {
-		String name = firstNonBlank(identity.name(), requestName);
-		if (name != null && name.length() > 50) {
-			name = name.substring(0, 50);
-		}
+		String name = truncate(firstNonBlank(identity.name(), requestName), NAME_MAX_LENGTH);
 		try {
 			User user = userRepository.save(User.ofSocial(name));
 			oauthAccountRepository.saveAndFlush(OauthAccount.of(user, provider, identity.subject()));
@@ -170,6 +170,16 @@ public class AuthService {
 
 	private static boolean tooLongForBcrypt(String password) {
 		return password.getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES;
+	}
+
+	/**
+	 * 글자 수로 자른다. PostgreSQL varchar(n)이 글자(코드 포인트) 수로 세므로, 이모지처럼 UTF-16 두 칸인 글자를 반으로 가르지 않는다
+	 */
+	private static String truncate(String value, int maxLength) {
+		if (value == null || value.codePointCount(0, value.length()) <= maxLength) {
+			return value;
+		}
+		return value.substring(0, value.offsetByCodePoints(0, maxLength));
 	}
 
 	private static String firstNonBlank(String first, String second) {
