@@ -17,6 +17,8 @@ import com.tukorea.gdgoc.koready.domain.trip.entity.StayType;
 import com.tukorea.gdgoc.koready.domain.trip.entity.Trip;
 import com.tukorea.gdgoc.koready.domain.trip.entity.TripCategory;
 import com.tukorea.gdgoc.koready.domain.trip.entity.TripConditions;
+import com.tukorea.gdgoc.koready.domain.trip.repository.PlaceInTrip;
+import com.tukorea.gdgoc.koready.domain.trip.repository.TripItemRepository;
 import com.tukorea.gdgoc.koready.domain.trip.repository.TripRepository;
 import com.tukorea.gdgoc.koready.domain.user.entity.User;
 import com.tukorea.gdgoc.koready.global.dto.Code;
@@ -58,6 +60,7 @@ public class TripService {
 	private static final BigDecimal MAX_BUDGET_KRW = BigDecimal.valueOf(Integer.MAX_VALUE);
 
 	private final TripRepository trips;
+	private final TripItemRepository tripItems;
 	private final PlaceRepository places;
 	private final PlaceClassRepository placeClasses;
 	private final GeoService geoService;
@@ -123,10 +126,22 @@ public class TripService {
 	 * 숙소·카테고리를 지연 로딩하므로 부르는 쪽 트랜잭션 안에서 쓴다.
 	 */
 	public Trip findMyTrip(Long userId, Long tripId) {
+		return myTrip(userId, tripId).orElseThrow(() -> new ApiException(ErrorCode.TRIP_NOT_FOUND));
+	}
+
+	/**
+	 * 내 여행에 그 장소가 담긴 첫 일정 항목 (일자·순서 순). 없는 여행·남의 여행·담기지 않은 장소면 비어 있다.
+	 * 장소 상세처럼 여행이 없어도 404가 아닌 조회가 쓴다.
+	 */
+	@Transactional(readOnly = true)
+	public Optional<PlaceInTrip> findPlaceInMyTrip(Long userId, Long tripId, Long placeId) {
+		return myTrip(userId, tripId)
+				.flatMap(trip -> tripItems.findPlaceInTrip(tripId, placeId).stream().findFirst());
+	}
+
+	private Optional<Trip> myTrip(Long userId, Long tripId) {
 		// 사용자는 지연 로딩 프록시라 ID만 읽어 users를 조회하지 않는다
-		return trips.findById(tripId)
-				.filter(trip -> trip.getUser().getId().equals(userId))
-				.orElseThrow(() -> new ApiException(ErrorCode.TRIP_NOT_FOUND));
+		return trips.findById(tripId).filter(trip -> trip.getUser().getId().equals(userId));
 	}
 
 	/**

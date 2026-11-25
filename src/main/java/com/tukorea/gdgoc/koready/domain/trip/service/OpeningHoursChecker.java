@@ -1,6 +1,7 @@
 package com.tukorea.gdgoc.koready.domain.trip.service;
 
 import com.tukorea.gdgoc.koready.domain.place.repository.PlaceOpeningHourRepository;
+import com.tukorea.gdgoc.koready.domain.place.service.OpeningHours;
 import com.tukorea.gdgoc.koready.domain.trip.entity.TripDay;
 import com.tukorea.gdgoc.koready.domain.trip.entity.TripItem;
 import java.util.HashSet;

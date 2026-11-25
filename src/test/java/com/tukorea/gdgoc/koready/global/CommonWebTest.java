@@ -10,16 +10,20 @@ import com.tukorea.gdgoc.koready.global.exception.ApiException;
 import com.tukorea.gdgoc.koready.global.exception.ErrorCode;
 import com.tukorea.gdgoc.koready.global.util.SeoulTime;
 import com.tukorea.gdgoc.koready.global.web.Language;
+import com.tukorea.gdgoc.koready.security.JwtProvider;
 import com.tukorea.gdgoc.koready.support.IntegrationTest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import org.apache.tomcat.util.http.InvalidParameterException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -39,6 +43,9 @@ class CommonWebTest {
 
 	@Autowired
 	MockMvcTester mvc;
+
+	@Value("${jwt.secret}")
+	String jwtSecret;
 
 	@Test
 	void apiExceptionBodyHasCodeMessageFieldsAndExtra() {
@@ -122,6 +129,22 @@ class CommonWebTest {
 				.extractingPath("$.code").isEqualTo("UNAUTHORIZED");
 		assertThat(mvc.get().uri("/test/common/me").header("X-Dev-User-Id", "abc"))
 				.hasStatus(HttpStatus.UNAUTHORIZED);
+	}
+
+	@Test
+	void optionalLoginUserIdIsNullWithoutTokenButSentTokenIsChecked() {
+		String expired = new JwtProvider(jwtSecret, 30, 14,
+				Clock.fixed(Instant.parse("2020-01-01T00:00:00Z"), ZoneOffset.UTC)).createAccessToken(1L);
+
+		assertThat(mvc.get().uri("/test/common/me-optional")).hasStatusOk().bodyJson().isEqualTo("{\"userId\": null}");
+		assertThat(mvc.get().uri("/test/common/me-optional").header("X-Dev-User-Id", "7"))
+				.hasStatusOk().bodyJson().isEqualTo("{\"userId\": 7}");
+		assertThat(mvc.get().uri("/test/common/me-optional").header("Authorization", "Bearer not-a-jwt"))
+				.hasStatus(HttpStatus.UNAUTHORIZED).bodyJson().extractingPath("$.code").isEqualTo("UNAUTHORIZED");
+		assertThat(mvc.get().uri("/test/common/me-optional").header("Authorization", "bearer not-a-jwt"))
+				.hasStatus(HttpStatus.UNAUTHORIZED).bodyJson().extractingPath("$.code").isEqualTo("UNAUTHORIZED");
+		assertThat(mvc.get().uri("/test/common/me-optional").header("Authorization", "Bearer " + expired))
+				.hasStatus(HttpStatus.UNAUTHORIZED).bodyJson().extractingPath("$.code").isEqualTo("TOKEN_EXPIRED");
 	}
 
 	@Test
@@ -216,6 +239,14 @@ class CommonWebTest {
 		@GetMapping("/me")
 		Map<String, Object> me(@LoginUserId Long userId, Language language) {
 			return Map.of("userId", userId, "language", language);
+		}
+
+		record Me(Long userId) {
+		}
+
+		@GetMapping("/me-optional")
+		Me meOptional(@LoginUserId(required = false) Long userId) {
+			return new Me(userId);
 		}
 
 		@GetMapping("/search")

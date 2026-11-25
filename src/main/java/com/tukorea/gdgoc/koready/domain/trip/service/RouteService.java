@@ -4,6 +4,7 @@ import com.tukorea.gdgoc.koready.domain.candidate.config.CandidateProperties;
 import com.tukorea.gdgoc.koready.domain.place.entity.Place;
 import com.tukorea.gdgoc.koready.domain.place.repository.PlaceOpeningHourRepository;
 import com.tukorea.gdgoc.koready.domain.place.repository.PlaceRepository;
+import com.tukorea.gdgoc.koready.domain.place.service.OpeningHours;
 import com.tukorea.gdgoc.koready.domain.trip.dto.RouteResponse;
 import com.tukorea.gdgoc.koready.domain.trip.dto.UnscheduledReason;
 import com.tukorea.gdgoc.koready.domain.trip.entity.Trip;
