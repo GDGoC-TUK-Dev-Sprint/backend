@@ -79,8 +79,12 @@ public class ExchangeService {
 	 */
 	@Transactional(readOnly = true)
 	public long toKrw(Money money) {
-		BigDecimal krw = money.amount().multiply(krwPerUnit(money.currency()));
-		return krw.setScale(0, RoundingMode.HALF_UP).longValueExact();
+		return toKrw(money, krwPerUnit(money.currency()));
+	}
+
+	/** 요청 금액을 이미 읽어 둔 환율로 원 단위로 바꾼다 (반올림). 여러 금액을 바꿀 때 환율을 한 번만 읽는다 */
+	public long toKrw(Money money, BigDecimal krwPerUnit) {
+		return money.amount().multiply(krwPerUnit).setScale(0, RoundingMode.HALF_UP).longValueExact();
 	}
 
 	/** 원화 금액 하나를 표시 통화로 (오늘 환율, 반올림). 범위(최소~최대)는 최소 내림·최대 올림으로 따로 바꾼다 */

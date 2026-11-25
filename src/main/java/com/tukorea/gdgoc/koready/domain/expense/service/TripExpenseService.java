@@ -137,10 +137,13 @@ public class TripExpenseService {
 		errors.throwIfAny();
 
 		int multiplier = request.basis() == ExpenseSaveRequest.Basis.PER_PERSON ? trip.getPartySize() : 1;
+		// 환율은 통화마다 한 번만 읽는다 (항목마다 통화가 다를 수 있다)
+		Map<DisplayCurrency, BigDecimal> krwPerUnit = new EnumMap<>(DisplayCurrency.class);
 		List<TripExpense> rows = new ArrayList<>();
 		for (int i = 0; i < items.size(); i++) {
 			ExpenseSaveRequest.Item item = items.get(i);
-			long krw = exchangeService.toKrw(item.amount()) * multiplier;
+			BigDecimal rate = krwPerUnit.computeIfAbsent(item.amount().currency(), exchangeService::krwPerUnit);
+			long krw = exchangeService.toKrw(item.amount(), rate) * multiplier;
 			if (krw > Integer.MAX_VALUE) {
 				errors.add("items[" + i + "].amount.amount", "너무 큽니다");
 				continue;
@@ -357,13 +360,14 @@ public class TripExpenseService {
 		}
 		String unit = " " + converter.currency().name();
 		List<String> sentences = new ArrayList<>();
-		if (saved != null) {
+		// 표시 통화로 바꿔 0이 되는 차이(예: 5원 → 0.00 USD)는 문장으로 만들지 않는다
+		if (saved != null && converter.amount(savedBy).amount().signum() != 0) {
 			String amount = ExpenseLabels.amount(converter.amount(savedBy).amount()) + unit;
 			sentences.add(language.pick(
 					ExpenseLabels.item(saved, language) + "에서 예상보다 1인 " + amount + " 덜 썼어요.",
 					"You spent " + amount + " less per person than expected on " + ExpenseLabels.item(saved, language) + "."));
 		}
-		if (over != null) {
+		if (over != null && converter.amount(overBy).amount().signum() != 0) {
 			String amount = ExpenseLabels.amount(converter.amount(overBy).amount()) + unit;
 			sentences.add(language.pick(
 					ExpenseLabels.item(over, language) + "에서 예상보다 1인 " + amount + " 더 썼어요.",
