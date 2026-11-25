@@ -1,10 +1,11 @@
-package com.tukorea.gdgoc.koready.domain.trip.service;
+package com.tukorea.gdgoc.koready.domain.place.service;
 
 import com.tukorea.gdgoc.koready.domain.place.entity.HoursType;
 import com.tukorea.gdgoc.koready.domain.place.entity.Place;
 import com.tukorea.gdgoc.koready.domain.place.entity.PlaceOpeningHour;
 import com.tukorea.gdgoc.koready.domain.place.repository.PlaceOpeningHourRepository;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -16,29 +17,29 @@ import java.util.stream.Collectors;
 
 /**
  * 장소 하나의 영업시간 판정. 동선 만들기(일자 배정·순서), 시각 계산(여는 시각까지 기다림), 일자별 일정 경고가 같이 써서
- * 막 만든 동선에 경고가 붙지 않게 한다.
+ * 막 만든 동선에 경고가 붙지 않게 하고, 장소 상세의 "지금 운영 중"도 같은 행 고르기로 정한다.
  * 운영시간이 {@code STRUCTURED}가 아닌 장소(상시 개방·확인 필요)는 제약이 없다고 본다. 시각은 그날 0시부터의 분이다.
  *
- * @param restricted 요일별 운영시간을 지키는지 ({@code STRUCTURED})
+ * @param type 운영시간 유형. {@code STRUCTURED}면 요일별 운영시간을 지킨다
  * @param rows 요일별 운영시간. 행이 없는 요일은 정기 휴무다
  * @param eventStart 축제·행사 시작일 (끝일은 {@code eventEnd}). 기간 밖의 날은 열지 않는다
  */
-record OpeningHours(boolean restricted, List<Row> rows, LocalDate eventStart, LocalDate eventEnd) {
+public record OpeningHours(HoursType type, List<Row> rows, LocalDate eventStart, LocalDate eventEnd) {
 
-	static final int MINUTES_PER_DAY = 24 * 60;
+	public static final int MINUTES_PER_DAY = 24 * 60;
 	/** 운영시간 제약이 없는 장소 */
-	static final OpeningHours UNRESTRICTED = new OpeningHours(false, List.of(), null, null);
+	public static final OpeningHours UNRESTRICTED = new OpeningHours(HoursType.ALWAYS_OPEN, List.of(), null, null);
 	private static final DateTimeFormatter MONTH_DAY = DateTimeFormatter.ofPattern("MM-dd");
 
 	/** 장소의 운영시간. {@code rows}는 그 장소의 행이다 ({@code STRUCTURED}가 아니면 쓰지 않는다) */
-	static OpeningHours of(Place place, List<PlaceOpeningHour> rows) {
-		boolean restricted = place.getHoursType() == HoursType.STRUCTURED;
-		return new OpeningHours(restricted, restricted ? rows.stream().map(Row::from).toList() : List.of(),
+	public static OpeningHours of(Place place, List<PlaceOpeningHour> rows) {
+		HoursType type = place.getHoursType();
+		return new OpeningHours(type, type == HoursType.STRUCTURED ? rows.stream().map(Row::from).toList() : List.of(),
 				place.getEventStartDate(), place.getEventEndDate());
 	}
 
 	/** 장소마다 운영시간. {@code STRUCTURED}인 장소의 행만 한 번에 읽는다 */
-	static Map<Long, OpeningHours> byPlace(Collection<Place> places, PlaceOpeningHourRepository repository) {
+	public static Map<Long, OpeningHours> byPlace(Collection<Place> places, PlaceOpeningHourRepository repository) {
 		Set<Long> structured = places.stream()
 				.filter(place -> place.getHoursType() == HoursType.STRUCTURED)
 				.map(Place::getId)
@@ -51,19 +52,19 @@ record OpeningHours(boolean restricted, List<Row> rows, LocalDate eventStart, Lo
 	}
 
 	/** 그날 여는지. 축제·행사는 기간 안이어야 하고, {@code STRUCTURED}는 그 요일(계절 반영) 행이 있어야 한다 */
-	boolean opensOn(LocalDate date) {
+	public boolean opensOn(LocalDate date) {
 		if ((eventStart != null && date.isBefore(eventStart)) || (eventEnd != null && date.isAfter(eventEnd))) {
 			return false;
 		}
-		return !restricted || !applicable(date).isEmpty();
+		return !restricted() || !applicable(date).isEmpty();
 	}
 
 	/**
 	 * arrive~depart 동안 머물 수 있는지 (일자별 일정 경고). 그 날짜에 드는 계절 행이 있으면 그것을, 없으면 연중 행을 쓴다.
 	 * 축제·행사 기간은 보지 않는다 (동선 만들기가 기간 안의 날에만 둔다).
 	 */
-	boolean canStay(LocalDate date, LocalTime arrive, LocalTime depart) {
-		if (!restricted) {
+	public boolean canStay(LocalDate date, LocalTime arrive, LocalTime depart) {
+		if (!restricted()) {
 			return true;
 		}
 		int from = minutes(arrive);
@@ -74,11 +75,11 @@ record OpeningHours(boolean restricted, List<Row> rows, LocalDate eventStart, Lo
 	 * {@code arrive}에 도착해 {@code stayMinutes} 동안 머물 수 있는 가장 이른 시각. 여는 시각 전에 도착하면 여는 시각까지 기다린다.
 	 * 그날 열지 않거나 기다려도 머물 수 없으면 null이다.
 	 */
-	Integer earliestStart(LocalDate date, int arrive, int stayMinutes) {
+	public Integer earliestStart(LocalDate date, int arrive, int stayMinutes) {
 		if (!opensOn(date)) {
 			return null;
 		}
-		if (!restricted) {
+		if (!restricted()) {
 			return arrive;
 		}
 		List<Integer> starts = new ArrayList<>();
@@ -95,11 +96,11 @@ record OpeningHours(boolean restricted, List<Row> rows, LocalDate eventStart, Lo
 	}
 
 	/** from~to 사이에 그날 여는 시간(분). 영업시간이 빠듯한 장소를 고를 때 쓴다. 제약이 없으면 from~to 전체다 */
-	int openMinutesBetween(LocalDate date, int from, int to) {
+	public int openMinutesBetween(LocalDate date, int from, int to) {
 		if (!opensOn(date)) {
 			return 0;
 		}
-		if (!restricted) {
+		if (!restricted()) {
 			return to - from;
 		}
 		return applicable(date).stream()
@@ -109,6 +110,58 @@ record OpeningHours(boolean restricted, List<Row> rows, LocalDate eventStart, Lo
 					return Math.max(0, Math.min(close, to) - Math.max(open, from));
 				})
 				.sum();
+	}
+
+	/**
+	 * {@code at}에 운영 중인지 (장소 상세 "지금 운영 중"). 그날 행에 더해 전날 자정을 넘겨 영업하는 행도 본다.
+	 * 상시 개방은 {@code OPEN}, 확인 필요는 {@code UNKNOWN}이고, 축제·행사 기간 밖이면 {@code CLOSED}다.
+	 * 닫는 시각·입장 마감은 {@code OPEN}·{@code BREAK}일 때만 준다.
+	 */
+	public Now now(LocalDateTime at) {
+		LocalDate date = at.toLocalDate();
+		if (!restricted()) {
+			if (!opensOn(date)) {
+				return Now.CLOSED;
+			}
+			return new Now(type == HoursType.ALWAYS_OPEN ? Status.OPEN : Status.UNKNOWN, null, null);
+		}
+		int time = minutes(at.toLocalTime());
+		if (opensOn(date)) {
+			for (Row row : applicable(date)) {
+				if (minutes(row.open()) <= time && time < closeMinutes(row)) {
+					return now(row, time);
+				}
+			}
+		}
+		LocalDate yesterday = date.minusDays(1);
+		if (opensOn(yesterday)) {
+			for (Row row : applicable(yesterday)) {
+				if (time + MINUTES_PER_DAY < closeMinutes(row)) {
+					return now(row, time + MINUTES_PER_DAY);
+				}
+			}
+		}
+		return Now.CLOSED;
+	}
+
+	/** 그 행이 {@code time}(그 행의 날 0시부터의 분)을 덮을 때: 휴게시간이면 {@code BREAK}, 아니면 {@code OPEN} */
+	private static Now now(Row row, int time) {
+		Status status = Status.OPEN;
+		if (row.breakStart() != null && row.breakEnd() != null) {
+			int open = minutes(row.open());
+			int breakStart = minutes(row.breakStart());
+			int breakEnd = minutes(row.breakEnd());
+			breakStart += breakStart < open ? MINUTES_PER_DAY : 0;
+			breakEnd += breakEnd < open ? MINUTES_PER_DAY : 0;
+			if (breakStart <= time && time < breakEnd) {
+				status = Status.BREAK;
+			}
+		}
+		return new Now(status, row.close(), row.lastEntry());
+	}
+
+	private boolean restricted() {
+		return type == HoursType.STRUCTURED;
 	}
 
 	/** 그 날짜에 쓰는 행: 그 요일의 계절 행 중 날짜가 드는 것, 없으면 연중 행 */
@@ -152,8 +205,24 @@ record OpeningHours(boolean restricted, List<Row> rows, LocalDate eventStart, Lo
 		return close <= open ? close + MINUTES_PER_DAY : close;
 	}
 
-	static int minutes(LocalTime time) {
+	public static int minutes(LocalTime time) {
 		return time.getHour() * 60 + time.getMinute();
+	}
+
+	/** 지금 운영 상태. {@code BREAK}는 휴게(준비)시간이다 */
+	public enum Status {
+		OPEN, BREAK, CLOSED, UNKNOWN
+	}
+
+	/**
+	 * 지금 운영 상태와 그 행의 닫는 시각·입장 마감.
+	 *
+	 * @param closesAt {@code OPEN}·{@code BREAK}일 때 닫는 시각. 그 밖에는 null
+	 * @param lastEntryAt {@code OPEN}·{@code BREAK}일 때 입장 마감. 없거나 그 밖에는 null
+	 */
+	public record Now(Status status, LocalTime closesAt, LocalTime lastEntryAt) {
+
+		static final Now CLOSED = new Now(Status.CLOSED, null, null);
 	}
 
 	/**
@@ -162,12 +231,14 @@ record OpeningHours(boolean restricted, List<Row> rows, LocalDate eventStart, Lo
 	 * @param dayOfWeek 1 월 … 7 일
 	 * @param seasonFrom MM-DD. null이면 연중
 	 * @param close 자정을 넘기면 open보다 작다
+	 * @param breakStart 휴게시간 시작. 동선 계산은 아직 보지 않고 "지금 운영 중"만 본다
 	 */
-	record Row(int dayOfWeek, String seasonFrom, String seasonTo, LocalTime open, LocalTime close, LocalTime lastEntry) {
+	public record Row(int dayOfWeek, String seasonFrom, String seasonTo, LocalTime open, LocalTime close,
+			LocalTime lastEntry, LocalTime breakStart, LocalTime breakEnd) {
 
 		static Row from(PlaceOpeningHour hour) {
 			return new Row(hour.getDayOfWeek(), hour.getSeasonFrom(), hour.getSeasonTo(), hour.getOpenTime(),
-					hour.getCloseTime(), hour.getLastEntryTime());
+					hour.getCloseTime(), hour.getLastEntryTime(), hour.getBreakStart(), hour.getBreakEnd());
 		}
 
 		boolean isSeasonal() {

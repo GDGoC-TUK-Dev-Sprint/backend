@@ -1,6 +1,7 @@
 package com.tukorea.gdgoc.koready.domain.trip.service;
 
 import com.tukorea.gdgoc.koready.domain.candidate.config.CandidateProperties;
+import com.tukorea.gdgoc.koready.domain.place.service.OpeningHours;
 import com.tukorea.gdgoc.koready.domain.trip.config.RouteProperties;
 import com.tukorea.gdgoc.koready.domain.trip.dto.UnscheduledReason;
 import com.tukorea.gdgoc.koready.global.dto.LatLng;

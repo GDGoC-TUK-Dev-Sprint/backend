@@ -3,6 +3,8 @@ package com.tukorea.gdgoc.koready.domain.trip.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tukorea.gdgoc.koready.domain.candidate.config.CandidateProperties;
+import com.tukorea.gdgoc.koready.domain.place.entity.HoursType;
+import com.tukorea.gdgoc.koready.domain.place.service.OpeningHours;
 import com.tukorea.gdgoc.koready.domain.trip.config.RouteProperties;
 import com.tukorea.gdgoc.koready.domain.trip.dto.UnscheduledReason;
 import com.tukorea.gdgoc.koready.global.dto.LatLng;
@@ -184,9 +186,9 @@ class RoutePlannerTest {
 
 	@Test
 	void placeClosedForTheWholeTripIsUnscheduled() {
-		RoutePlanner.Stop sundayOnly = stop(0.002, 0.0, 60, new OpeningHours(true,
+		RoutePlanner.Stop sundayOnly = stop(0.002, 0.0, 60, new OpeningHours(HoursType.STRUCTURED,
 				List.of(row(7, LocalTime.of(9, 0), LocalTime.of(18, 0))), null, null));
-		RoutePlanner.Stop afterTrip = stop(0.003, 0.0, 60, new OpeningHours(false, List.of(),
+		RoutePlanner.Stop afterTrip = stop(0.003, 0.0, 60, new OpeningHours(HoursType.ALWAYS_OPEN, List.of(),
 				LocalDate.of(2026, 12, 1), LocalDate.of(2026, 12, 3)));
 
 		RoutePlanner.Plan plan = planner.plan(STAY, THREE_DAYS, List.of(sundayOnly, afterTrip));
@@ -198,7 +200,7 @@ class RoutePlannerTest {
 
 	@Test
 	void festivalGoesToADayInItsPeriod() {
-		RoutePlanner.Stop festival = stop(0.002, 0.0, 60, new OpeningHours(false, List.of(),
+		RoutePlanner.Stop festival = stop(0.002, 0.0, 60, new OpeningHours(HoursType.ALWAYS_OPEN, List.of(),
 				LocalDate.of(2026, 11, 12), LocalDate.of(2026, 11, 20)));
 		List<RoutePlanner.Stop> stops = List.of(stop(0.05, 0.0), stop(-0.05, 0.0), festival);
 
@@ -254,16 +256,16 @@ class RoutePlannerTest {
 				.filter(dayOfWeek -> dayOfWeek != closedDayOfWeek)
 				.mapToObj(dayOfWeek -> row(dayOfWeek, LocalTime.of(9, 0), LocalTime.of(18, 0)))
 				.toList();
-		return new OpeningHours(true, rows, null, null);
+		return new OpeningHours(HoursType.STRUCTURED, rows, null, null);
 	}
 
 	private static OpeningHours everyDay(LocalTime open, LocalTime close) {
-		return new OpeningHours(true, IntStream.rangeClosed(1, 7).mapToObj(day -> row(day, open, close)).toList(), null,
-				null);
+		return new OpeningHours(HoursType.STRUCTURED,
+				IntStream.rangeClosed(1, 7).mapToObj(day -> row(day, open, close)).toList(), null, null);
 	}
 
 	private static OpeningHours.Row row(int dayOfWeek, LocalTime open, LocalTime close) {
-		return new OpeningHours.Row(dayOfWeek, null, null, open, close, null);
+		return new OpeningHours.Row(dayOfWeek, null, null, open, close, null, null, null);
 	}
 
 	private static List<RoutePlanner.Stop> concat(List<RoutePlanner.Stop> a, List<RoutePlanner.Stop> b) {
