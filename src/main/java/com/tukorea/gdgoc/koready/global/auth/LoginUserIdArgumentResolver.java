@@ -3,6 +3,7 @@ package com.tukorea.gdgoc.koready.global.auth;
 import com.tukorea.gdgoc.koready.global.exception.ApiException;
 import com.tukorea.gdgoc.koready.global.exception.ErrorCode;
 import org.springframework.core.MethodParameter;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.context.request.RequestAttributes;
@@ -12,6 +13,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 /**
  * {@link LoginUserId} 파라미터에 요청 속성의 사용자 ID를 넣는다. 없으면 액세스 토큰이 만료됐을 때
  * {@code 401 TOKEN_EXPIRED}(앱이 재발급을 부른다), 그 밖에는 {@code 401 UNAUTHORIZED}다.
+ * {@code required = false}면 {@code Authorization: Bearer} 헤더가 없는 요청에 null을 넣는다 (보낸 토큰이 틀리거나 만료됐으면 같은 401).
  */
 public class LoginUserIdArgumentResolver implements HandlerMethodArgumentResolver {
 
@@ -35,6 +37,11 @@ public class LoginUserIdArgumentResolver implements HandlerMethodArgumentResolve
 		}
 		if (Boolean.TRUE.equals(webRequest.getAttribute(EXPIRED_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST))) {
 			throw new ApiException(ErrorCode.TOKEN_EXPIRED);
+		}
+		LoginUserId annotation = parameter.getParameterAnnotation(LoginUserId.class);
+		String authorization = webRequest.getHeader(HttpHeaders.AUTHORIZATION);
+		if (!annotation.required() && (authorization == null || !authorization.startsWith("Bearer "))) {
+			return null;
 		}
 		throw new ApiException(ErrorCode.UNAUTHORIZED);
 	}
