@@ -50,4 +50,11 @@ public class Favorite {
 	@CreationTimestamp
 	@Column(nullable = false)
 	private Instant createdAt;
+
+	public static Favorite create(User user, Place place) {
+		Favorite favorite = new Favorite();
+		favorite.user = user;
+		favorite.place = place;
+		return favorite;
+	}
 }

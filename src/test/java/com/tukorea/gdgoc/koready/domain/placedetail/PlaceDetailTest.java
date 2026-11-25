@@ -201,6 +201,15 @@ class PlaceDetailTest {
 	}
 
 	@Test
+	void unstructuredHoursGiveNoWeeklyOrClosedDaysEvenWithStoredRows() {
+		jdbc.update("UPDATE places SET hours_type = 'UNKNOWN' WHERE id = ?", placeId);
+
+		assertThat(get(mvc.get().uri("/api/places/{placeId}", placeId).exchange())).bodyJson().isLenientlyEqualTo("""
+				{"hours": {"type": "UNKNOWN", "now": {"status": "UNKNOWN"}, "weekly": [], "closedDays": []}}
+				""");
+	}
+
+	@Test
 	void missingPlaceIsPlaceNotFound() {
 		assertThat(mvc.get().uri("/api/places/{placeId}", placeId + 1000))
 				.hasStatus(HttpStatus.NOT_FOUND)

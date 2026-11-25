@@ -10,6 +10,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -116,6 +117,7 @@ public record OpeningHours(HoursType type, List<Row> rows, LocalDate eventStart,
 	 * {@code at}에 운영 중인지 (장소 상세 "지금 운영 중"). 그날 행에 더해 전날 자정을 넘겨 영업하는 행도 본다.
 	 * 상시 개방은 {@code OPEN}, 확인 필요는 {@code UNKNOWN}이고, 축제·행사 기간 밖이면 {@code CLOSED}다.
 	 * 입장 마감이 지나면 닫는 시각 전이어도 {@code CLOSED}다 (일정 경고가 그 시각 도착을 머물 수 없다고 보는 것과 같다).
+	 * 그날 영업 구간이 둘로 나뉜 장소의 구간 사이는 {@code BREAK}이고, 닫는 시각·입장 마감은 다음 구간 것이다.
 	 * 닫는 시각·입장 마감은 {@code OPEN}·{@code BREAK}일 때만 준다.
 	 */
 	public Now now(LocalDateTime at) {
@@ -140,6 +142,16 @@ public record OpeningHours(HoursType type, List<Row> rows, LocalDate eventStart,
 				if (admits(row, time + MINUTES_PER_DAY)) {
 					return now(row, time + MINUTES_PER_DAY);
 				}
+			}
+		}
+		if (opensOn(date)) {
+			List<Row> today = applicable(date);
+			if (today.stream().anyMatch(row -> minutes(row.open()) <= time)) {
+				return today.stream()
+						.filter(row -> minutes(row.open()) > time)
+						.min(Comparator.comparingInt(row -> minutes(row.open())))
+						.map(next -> new Now(Status.BREAK, next.close(), next.lastEntry()))
+						.orElse(Now.CLOSED);
 			}
 		}
 		return Now.CLOSED;

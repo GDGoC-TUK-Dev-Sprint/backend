@@ -12,13 +12,13 @@ public interface TripItemRepository extends JpaRepository<TripItem, Long> {
 	@Query("select i from TripItem i join fetch i.tripDay d where i.id = :itemId and d.trip.id = :tripId")
 	Optional<TripItem> findInTrip(Long tripId, Long itemId);
 
-	/** 그 사용자의 여행에 그 장소가 담긴 일정 항목 (일자·순서 순). 없는 여행·남의 여행이면 비어 있다 */
+	/** 그 여행에 그 장소가 담긴 일정 항목 (일자·순서 순). 내 여행인지는 부르는 쪽({@code TripService})이 본다 */
 	@Query("""
 			select new com.tukorea.gdgoc.koready.domain.trip.repository.PlaceInTrip(
 			    d.trip.id, d.dayNumber, d.tripDate, i.arriveTime)
 			from TripItem i join i.tripDay d
-			where d.trip.id = :tripId and d.trip.user.id = :userId and i.place.id = :placeId
+			where d.trip.id = :tripId and i.place.id = :placeId
 			order by d.dayNumber, i.seq
 			""")
-	List<PlaceInTrip> findPlaceInTrip(Long userId, Long tripId, Long placeId);
+	List<PlaceInTrip> findPlaceInTrip(Long tripId, Long placeId);
 }

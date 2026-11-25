@@ -141,6 +141,8 @@ class CommonWebTest {
 				.hasStatusOk().bodyJson().isEqualTo("{\"userId\": 7}");
 		assertThat(mvc.get().uri("/test/common/me-optional").header("Authorization", "Bearer not-a-jwt"))
 				.hasStatus(HttpStatus.UNAUTHORIZED).bodyJson().extractingPath("$.code").isEqualTo("UNAUTHORIZED");
+		assertThat(mvc.get().uri("/test/common/me-optional").header("Authorization", "bearer not-a-jwt"))
+				.hasStatus(HttpStatus.UNAUTHORIZED).bodyJson().extractingPath("$.code").isEqualTo("UNAUTHORIZED");
 		assertThat(mvc.get().uri("/test/common/me-optional").header("Authorization", "Bearer " + expired))
 				.hasStatus(HttpStatus.UNAUTHORIZED).bodyJson().extractingPath("$.code").isEqualTo("TOKEN_EXPIRED");
 	}

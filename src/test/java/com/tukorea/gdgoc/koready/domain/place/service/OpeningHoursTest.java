@@ -144,6 +144,15 @@ class OpeningHoursTest {
 	}
 
 	@Test
+	void nowIsBreakBetweenTwoSessionsOfTheDay() {
+		OpeningHours hours = hours(row(2, "11:00", "15:00", null), row(2, "17:00", "22:00", "21:00"));
+
+		assertThat(hours.now(at(TUESDAY, "16:00"))).isEqualTo(new Now(Status.BREAK, time("22:00"), time("21:00")));
+		assertThat(hours.now(at(TUESDAY, "10:00")).status()).isEqualTo(Status.CLOSED);
+		assertThat(hours.now(at(TUESDAY, "22:30")).status()).isEqualTo(Status.CLOSED);
+	}
+
+	@Test
 	void closedDaysAreWeekdaysWithoutRowsOrOutOfSeason() {
 		OpeningHours hours = new OpeningHours(HoursType.STRUCTURED, List.of(
 				new OpeningHours.Row(1, "06-01", "08-31", time("09:00"), time("18:00"), null, null, null),

@@ -3,6 +3,7 @@ package com.tukorea.gdgoc.koready.domain.placedetail.service;
 import com.tukorea.gdgoc.koready.domain.exchange.service.ExchangeService;
 import com.tukorea.gdgoc.koready.domain.favorite.repository.FavoriteRepository;
 import com.tukorea.gdgoc.koready.domain.place.dto.PlaceSummary;
+import com.tukorea.gdgoc.koready.domain.place.entity.HoursType;
 import com.tukorea.gdgoc.koready.domain.place.entity.Place;
 import com.tukorea.gdgoc.koready.domain.place.entity.PlaceFee;
 import com.tukorea.gdgoc.koready.domain.place.entity.PlaceOpeningHour;
@@ -11,7 +12,7 @@ import com.tukorea.gdgoc.koready.domain.place.repository.PlaceOpeningHourReposit
 import com.tukorea.gdgoc.koready.domain.place.repository.PlaceRepository;
 import com.tukorea.gdgoc.koready.domain.place.service.OpeningHours;
 import com.tukorea.gdgoc.koready.domain.placedetail.dto.PlaceDetailResponse;
-import com.tukorea.gdgoc.koready.domain.trip.repository.TripItemRepository;
+import com.tukorea.gdgoc.koready.domain.trip.service.TripService;
 import com.tukorea.gdgoc.koready.global.dto.Code;
 import com.tukorea.gdgoc.koready.global.dto.DisplayCurrency;
 import com.tukorea.gdgoc.koready.global.dto.LatLng;
@@ -48,7 +49,7 @@ public class PlaceDetailService {
 	private final PlaceOpeningHourRepository openingHours;
 	private final PlaceFeeRepository fees;
 	private final FavoriteRepository favorites;
-	private final TripItemRepository tripItems;
+	private final TripService tripService;
 	private final ExchangeService exchangeService;
 	private final Clock clock;
 
@@ -91,7 +92,8 @@ public class PlaceDetailService {
 		return new PlaceDetailResponse.Hours(
 				place.getHoursType(),
 				new PlaceDetailResponse.Now(now.status(), now.closesAt(), now.lastEntryAt()),
-				rows.stream().sorted(WEEKLY_ORDER).map(PlaceDetailService::weekly).toList(),
+				place.getHoursType() != HoursType.STRUCTURED ? List.of()
+						: rows.stream().sorted(WEEKLY_ORDER).map(PlaceDetailService::weekly).toList(),
 				closedDays,
 				language.pick(place.getHoursTextKo(), place.getHoursTextEn()),
 				language.pick(place.getRestTextKo(), place.getRestTextEn()));
@@ -123,8 +125,7 @@ public class PlaceDetailService {
 	}
 
 	private PlaceDetailResponse.InTrip inTrip(Long userId, Long tripId, Long placeId) {
-		return tripItems.findPlaceInTrip(userId, tripId, placeId).stream()
-				.findFirst()
+		return tripService.findPlaceInMyTrip(userId, tripId, placeId)
 				.map(item -> new PlaceDetailResponse.InTrip(item.tripId(), item.dayNumber(), item.date(),
 						item.arriveTime()))
 				.orElse(null);

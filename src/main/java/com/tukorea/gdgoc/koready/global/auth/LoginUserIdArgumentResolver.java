@@ -25,8 +25,14 @@ public class LoginUserIdArgumentResolver implements HandlerMethodArgumentResolve
 
 	@Override
 	public boolean supportsParameter(MethodParameter parameter) {
-		return parameter.hasParameterAnnotation(LoginUserId.class)
-				&& (parameter.getParameterType() == Long.class || parameter.getParameterType() == long.class);
+		LoginUserId annotation = parameter.getParameterAnnotation(LoginUserId.class);
+		if (annotation == null) {
+			return false;
+		}
+		if (parameter.getParameterType() == long.class && !annotation.required()) {
+			throw new IllegalStateException("@LoginUserId(required = false)는 null을 받을 수 있게 Long으로 선언한다: " + parameter);
+		}
+		return parameter.getParameterType() == Long.class || parameter.getParameterType() == long.class;
 	}
 
 	@Override
@@ -40,7 +46,7 @@ public class LoginUserIdArgumentResolver implements HandlerMethodArgumentResolve
 		}
 		LoginUserId annotation = parameter.getParameterAnnotation(LoginUserId.class);
 		String authorization = webRequest.getHeader(HttpHeaders.AUTHORIZATION);
-		if (!annotation.required() && (authorization == null || !authorization.startsWith("Bearer "))) {
+		if (!annotation.required() && JwtLoginUserFilter.bearerToken(authorization) == null) {
 			return null;
 		}
 		throw new ApiException(ErrorCode.UNAUTHORIZED);

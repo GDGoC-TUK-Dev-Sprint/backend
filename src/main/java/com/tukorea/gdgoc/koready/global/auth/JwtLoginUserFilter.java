@@ -26,9 +26,8 @@ class JwtLoginUserFilter extends OncePerRequestFilter {
 	@Override
 	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
 			throws ServletException, IOException {
-		String header = request.getHeader("Authorization");
-		if (header != null && header.startsWith("Bearer ")) {
-			String token = header.substring(7).trim();
+		String token = bearerToken(request.getHeader("Authorization"));
+		if (token != null) {
 			Optional<Long> userId = jwtProvider.parseAccessToken(token);
 			if (userId.isPresent()) {
 				request.setAttribute(LoginUserIdArgumentResolver.REQUEST_ATTRIBUTE, userId.get());
@@ -37,5 +36,10 @@ class JwtLoginUserFilter extends OncePerRequestFilter {
 			}
 		}
 		chain.doFilter(request, response);
+	}
+
+	/** {@code Authorization} 헤더의 Bearer 토큰. 스킴은 대소문자를 가리지 않는다. Bearer 헤더가 아니면 null */
+	static String bearerToken(String header) {
+		return header != null && header.regionMatches(true, 0, "Bearer ", 0, 7) ? header.substring(7).trim() : null;
 	}
 }
